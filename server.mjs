@@ -5,6 +5,7 @@ import { demo } from './lib/demo.mjs';
 import { normaliseRegistration, parseDate, monthBounds } from './lib/coverage.mjs';
 import {londonMidnight,londonDate,normaliseWorkspace,normaliseCoverage} from './lib/database.mjs';
 import {fleetQuery,historyQuery,checkedId} from './lib/queries.mjs';
+import {memberRole,memberEmail} from './lib/members.mjs';
 const root = new URL('./public/', import.meta.url);
 const demoMode = process.env.DEMO_MODE === 'true';
 const base = process.env.SUPABASE_URL;
@@ -79,7 +80,11 @@ export async function handleRequest(req,res) {
       const access=token(req); if(!access) throw failure('Please sign in.',401);
       const user=await sb('/auth/v1/user',access);
       const isDemoAccount=user.email?.toLowerCase()===demoAccountEmail && !!user.email_confirmed_at;
-      if(url.pathname === '/api/me' && req.method === 'GET') return send(200,{email:user.email,demo:isDemoAccount});
+      if(url.pathname === '/api/me' && req.method === 'GET') {
+        // Pending invitations for this confirmed email become memberships at first sign-in.
+        if(!isDemoAccount)await sb('/rest/v1/rpc/claim_invitations',access,{method:'POST',body:'{}'}).catch(()=>null);
+        return send(200,{id:user.id,email:user.email,demo:isDemoAccount});
+      }
       if(url.pathname === '/api/logout' && req.method === 'POST') {
         await sb('/auth/v1/logout',access,{method:'POST'});
         res.setHeader('Set-Cookie',cookieName+'=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+secure);return send(200,{ok:true});
@@ -147,6 +152,32 @@ export async function handleRequest(req,res) {
         const id=await sb('/rest/v1/rpc/generate_reconciliation',access,{method:'POST',body:JSON.stringify({p_fleet_id:policies[0].fleet_id,p_policy_id:data.policy_id,p_month:data.month+'-01'})});
         const [reports,lines]=await Promise.all([sb('/rest/v1/reconciliations?select=*&id=eq.'+id,access),allRows('reconciliation_lines',access,'reconciliation_id=eq.'+id+'&order=id.asc')]);
         return send(201,{report:reports[0],lines});
+      }
+      // User management. Every rule is enforced again inside the database functions; this layer only validates input.
+      if(url.pathname === '/api/members' && req.method === 'GET') {
+        const org=checkedId(url.searchParams.get('org'));
+        return send(200,{rows:await sb('/rest/v1/rpc/list_members',access,{method:'POST',body:JSON.stringify({p_org:org})})});
+      }
+      if(url.pathname === '/api/members' && req.method === 'POST') {
+        const data=await body(req);
+        const result=await sb('/rest/v1/rpc/add_member',access,{method:'POST',body:JSON.stringify({p_org:checkedId(data.org),p_email:memberEmail(data.email),p_role:memberRole(data.role)})});
+        return send(201,{result});
+      }
+      if(url.pathname === '/api/members/role' && req.method === 'POST') {
+        const data=await body(req);
+        await sb('/rest/v1/rpc/change_member_role',access,{method:'POST',body:JSON.stringify({p_membership:checkedId(data.membership),p_role:memberRole(data.role)})});
+        return send(200,{ok:true});
+      }
+      if(url.pathname === '/api/members/active' && req.method === 'POST') {
+        const data=await body(req);
+        if(typeof data.active!=='boolean')throw failure('Choose whether the person should have access.');
+        await sb('/rest/v1/rpc/set_member_active',access,{method:'POST',body:JSON.stringify({p_membership:checkedId(data.membership),p_active:data.active})});
+        return send(200,{ok:true});
+      }
+      if(url.pathname === '/api/members/revoke' && req.method === 'POST') {
+        const data=await body(req);
+        await sb('/rest/v1/rpc/revoke_invitation',access,{method:'POST',body:JSON.stringify({p_invitation:checkedId(data.invitation)})});
+        return send(200,{ok:true});
       }
       throw failure('Not found.',404);
     }
