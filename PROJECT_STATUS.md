@@ -125,3 +125,10 @@ Not built: sending invitation emails (needs a server-side Supabase admin credent
 - A vehicle is charged for the full day it goes on cover, even if added at 23:59, and for the full day it is removed. This matches the current default (start day and end day both charged). Reports stay marked provisional until an insurer confirms.
 - Tax on insurance is Insurance Premium Tax (IPT), not VAT. The rate and whether quoted premiums already include it are NOT confirmed; the `vat_rate` column is a placeholder at 0 and the reports show tax separately.
 - Future-dated additions (add from a chosen date) are supported by the Add vehicle date picker. Backdating stays blocked: a vehicle is on or off cover, with no approval workflow planned for now.
+
+## Registration lookup — 23 October 2026 (branch feature/vehicle-lookup)
+- Add vehicle form has a "Look up" button. It calls `/api/vehicle-lookup`, which asks the DVLA Vehicle Enquiry Service (VES) and fills in Make. DVLA does not return the model, so the person still types it. The result is a convenience only: it does not confirm cover or ownership and nothing is stored.
+- Off by default: it works only when `DVLA_VES_API_KEY` is set on the server (never in browser code). Without it the button says lookup is not set up and the form still works by hand.
+- Signed-in users only; the demo account is blocked; 30 lookups a minute per user per server instance.
+- **Key availability:** on 23 Oct 2026 the DVLA VES page said new VES API registrations were closed for system upgrades. A paid supplier (for example UK Vehicle Data) is the fallback and would need its own small adapter in `lib/vehicle-lookup.mjs`.
+- Verified: 40 Node tests with a stubbed DVLA response. NOT yet tested against the real DVLA service (no key) or in a real browser.
