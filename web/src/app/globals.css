@@ -82,3 +82,5 @@ a.button-link{display:inline-block;background:white;color:var(--ink);border:1px 
 .tabs a{display:inline-block;padding:12px 0;color:var(--muted);text-decoration:none;font-weight:600}.tabs a.active{border-bottom:2px solid var(--accent);color:var(--ink)}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .lookup-row{display:flex;gap:8px;align-items:stretch}.lookup-row input{flex:1}.lookup-row button{white-space:nowrap}
+
+.match-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}.match-list li+li{border-top:1px solid var(--line)}.match-list button{width:100%;text-align:left;border:0;border-radius:0;font-weight:400;padding:12px 14px}.match-card{display:grid;gap:4px;padding:14px 16px;border:1px solid #dbe5ce;background:#eaf0e1;border-radius:8px}

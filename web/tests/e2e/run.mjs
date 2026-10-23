@@ -108,7 +108,10 @@ try {
 
     // remove vehicle
     await page.click('a[role=tab]:has-text("Remove vehicle")'); await urlHas(page, /mode=remove/);
-    await page.locator('select[name=period_id]').selectOption({ index: 1 });
+    check('removal record button is off until a vehicle is chosen', await page.locator('button:has-text("Record removal")').isDisabled());
+    await page.fill('input[placeholder="Start typing a registration"]', 'ab10');
+    await page.waitForSelector('[data-testid=chosen-vehicle]');
+    check('typing a registration finds the vehicle and fills in its details', (await page.locator('[data-testid=chosen-vehicle]').innerText()).includes('AB10XYZ'));
     await page.fill('input[name=ends_on]', tomorrow); await page.click('button:has-text("Record removal")');
     await page.waitForSelector('text=Coverage change recorded');
     check('remove vehicle calls the database function', (await calls()).some(c => c.rpc === 'remove_vehicle_cover'));
@@ -150,6 +153,7 @@ try {
     check('insurer lands on the insurer dashboard', new URL(page.url()).pathname === '/insurer', page.url());
     let t = await text(page);
     check('insurer sees only their own customers', t.includes('Northbank Logistics') && t.includes('Riverside Couriers') && !t.includes('Hilltop Plumbing'), t.slice(-400));
+    check('insurer menu hides the platform overview', !(await page.locator('nav a').allInnerTexts()).some(x => /Platform overview/.test(x)));
     check('insurer has no insurer picker', await page.locator('select').filter({ hasText: 'All authorised insurers' }).count() === 0);
     await go(page, base + '/overview'); t = await text(page);
     check('insurer cannot use the platform overview', t.includes('requires platform administrator'), t.slice(-300));
@@ -168,6 +172,13 @@ try {
     check('own row is marked "This is you" and has no controls', t.includes('This is you'), t.slice(-300));
     await go(page, base + '/fleet'); t = await text(page);
     check('customer register shows only their vehicles', t.includes('AB10XYZ') && !t.includes('CD10XYZ'));
+    await go(page, base + '/fleet');
+    check('customer register has a Remove link on open periods', await page.locator('a[aria-label="Remove AB10XYZ"]').count() === 1);
+    await page.click('a[aria-label="Remove AB10XYZ"]'); await urlHas(page, /mode=remove/);
+    await page.waitForSelector('[data-testid=chosen-vehicle]');
+    check('Remove link opens the removal form with that vehicle chosen', (await page.locator('[data-testid=chosen-vehicle]').innerText()).includes('AB10XYZ'));
+    const custNav = await page.locator('nav a').allInnerTexts();
+    check('customer menu hides the platform and insurer dashboards', !custNav.some(x => /Platform overview|Insurer dashboard/.test(x)) && custNav.some(x => /Fleet dashboard/.test(x)), custNav.join('|'));
     await go(page, base + '/changes');
     check('customer can add vehicles (form enabled)', !(await page.locator('button:has-text("Record addition")').isDisabled()));
     await context.close(); }
@@ -198,7 +209,8 @@ try {
   // ---- mobile
   { const { context, page } = await session('platform@example.test', { width: 390, height: 800 });
     await go(page, base + '/fleet');
-    check('mobile has no horizontal page scroll', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+    const wide = await page.evaluate(() => [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('.table-scroll') && !e.closest('nav')).slice(0, 4).map(e => e.tagName + '.' + e.className + ' ' + Math.round(e.getBoundingClientRect().right)).join(' | '));
+    check('mobile has no horizontal page scroll', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), wide);
     await page.click('#menu-toggle'); check('mobile menu opens', await page.locator('.sidebar.menu-open').count() === 1);
     await context.close(); }
 

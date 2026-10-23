@@ -1,7 +1,7 @@
 'use client';
-import { useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useAction } from './useAction';
-import { addVehicle, removeVehicle, lookupRegistration } from '@/app/(app)/actions';
+import { addVehicle, removeVehicle, lookupRegistration, findOpenCover, type OpenCover } from '@/app/(app)/actions';
 
 type PolicyOption = { id: string; label: string };
 
@@ -51,19 +51,57 @@ export function AddVehicleForm({ policies, today, allowed }: { policies: PolicyO
   );
 }
 
-export function RemoveVehicleForm({ periods, today, allowed }: { periods: { id: string; label: string }[]; today: string; allowed: boolean }) {
-  const { pending, result, onSubmit } = useAction(removeVehicle);
+export function RemoveVehicleForm({ today, allowed, policyId = '', initialQuery = '' }: { today: string; allowed: boolean; policyId?: string; initialQuery?: string }) {
+  const { pending, result, onSubmit } = useAction(removeVehicle, true, () => { setChosen(null); setQuery(''); setMatches([]); setNote(''); });
+  const [query, setQuery] = useState(initialQuery);
+  const [matches, setMatches] = useState<OpenCover[]>([]);
+  const [chosen, setChosen] = useState<OpenCover | null>(null);
+  const [note, setNote] = useState('');
+  const latest = useRef(0);
+
+  // Search as the person types. Only the newest search may update the screen.
+  useEffect(() => {
+    const text = query.trim();
+    if (chosen && chosen.registration.replace(/\s/g, '').toLowerCase() === text.replace(/\s/g, '').toLowerCase()) return;
+    if (!text) { setMatches([]); setNote(''); setChosen(null); return; }
+    const id = ++latest.current;
+    const timer = setTimeout(async () => {
+      const r = await findOpenCover(text, policyId || undefined);
+      if (id !== latest.current) return;
+      if (!r.ok) { setMatches([]); setNote(r.message); return; }
+      setMatches(r.rows);
+      if (r.rows.length === 1) { setChosen(r.rows[0]); setNote(''); }
+      else { setChosen(null); setNote(r.rows.length ? (r.total > r.rows.length ? `Showing ${r.rows.length} of ${r.total}. Keep typing to narrow the list.` : '') : 'No vehicle with open cover matches that. Check the registration.'); }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [query, policyId, chosen]);
+
   return (
     <form onSubmit={onSubmit}>
-      <label>Open coverage period
-        <select name="period_id" required defaultValue="">
-          <option value="">Select a vehicle</option>
-          {periods.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
+      <label>Registration
+        <input value={query} onChange={e => { setQuery(e.target.value); setChosen(null); }} maxLength={80} placeholder="Start typing a registration" autoComplete="off" autoFocus={!initialQuery} />
       </label>
+      <div className="form-note" role="status" aria-live="polite">{note}</div>
+      {!chosen && matches.length > 1 && (
+        <ul className="match-list" aria-label="Matching vehicles">
+          {matches.map(m => (
+            <li key={m.id}><button type="button" onClick={() => { setChosen(m); setQuery(m.registration); setMatches([]); }}>
+              <strong className="registration">{m.registration}</strong> · {m.vehicle} · {m.policyRef} · from {m.startsOn}
+            </button></li>
+          ))}
+        </ul>
+      )}
+      {chosen && (
+        <div className="match-card" data-testid="chosen-vehicle">
+          <input type="hidden" name="period_id" value={chosen.id} />
+          <strong className="registration">{chosen.registration}</strong>
+          <span>{chosen.vehicle || 'Vehicle'}</span>
+          <span className="form-note">Policy {chosen.policyRef} · covered from {chosen.startsOn}</span>
+        </div>
+      )}
       <label>First date without cover<input type="date" name="ends_on" min={today} required /></label>
       <div className="form-note">The removal date is excluded from insured days. Closing a period preserves its history. Re-adding a vehicle creates a new period.</div>
-      <button disabled={!allowed || pending}>{pending ? 'Recording…' : 'Record removal'}</button>
+      <button disabled={!allowed || pending || !chosen}>{pending ? 'Recording…' : 'Record removal'}</button>
       <div role="status" aria-live="polite" className="form-note">{result?.message}</div>
     </form>
   );

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Context, Period, Policy } from '@/lib/types';
-import { orgName } from '@/lib/data';
+import { orgName, canChange } from '@/lib/data';
 import { today } from '@/lib/dates';
 
 export const Badge = ({ children, warn = false }: { children: ReactNode; warn?: boolean }) => <span className={'badge' + (warn ? ' warning' : '')}>{children}</span>;
@@ -60,11 +60,12 @@ const isActive = (r: Period, policy?: Policy) => {
 export const periodStatus = (r: Period, policy?: Policy) => (isActive(r, policy) ? 'Covered' : r.starts_on > today() ? 'Scheduled' : 'Removed / expired');
 
 export function FleetTable({ ctx, rows }: { ctx: Context; rows: Period[] }) {
+  const canRemove = canChange(ctx);
   return (
     <>
       <div className="table-scroll">
         <table>
-          <thead><tr><th>REGISTRATION</th><th>VEHICLE</th><th>POLICY</th><th>START DATE</th><th>REMOVAL DATE</th><th>STATUS</th></tr></thead>
+          <thead><tr><th>REGISTRATION</th><th>VEHICLE</th><th>POLICY</th><th>START DATE</th><th>REMOVAL DATE</th><th>STATUS</th>{canRemove && <th aria-label="Actions"></th>}</tr></thead>
           <tbody>
             {rows.map(r => {
               const policy = ctx.policies.find(p => p.id === r.policy_id);
@@ -76,6 +77,7 @@ export function FleetTable({ ctx, rows }: { ctx: Context; rows: Period[] }) {
                   <td>{r.starts_on}</td>
                   <td>{r.ends_on || 'Open period'}</td>
                   <td><Badge warn={!isActive(r, policy)}>{periodStatus(r, policy)}</Badge></td>
+                  {canRemove && <td>{!r.ends_on && <Link prefetch={false} className="textbtn" href={'/changes?' + new URLSearchParams({ mode: 'remove', rq: r.registration.replace(/\s/g, ''), policy: r.policy_id })} aria-label={'Remove ' + r.registration}>Remove</Link>}</td>}
                 </tr>
               );
             })}

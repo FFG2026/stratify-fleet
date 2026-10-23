@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { getContext, canManageUsers, orgName } from '@/lib/data';
+import { getContext, canManageUsers, isPlatform, isInsurerSide, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -8,9 +8,9 @@ import { signOut } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-const nav: (NavItem & { admin?: boolean })[] = [
-  { href: '/overview', label: 'Platform overview', icon: '◈' },
-  { href: '/insurer', label: 'Insurer dashboard', icon: '▦' },
+const nav: (NavItem & { admin?: boolean; platform?: boolean; insurer?: boolean })[] = [
+  { href: '/overview', label: 'Platform overview', icon: '◈', platform: true },
+  { href: '/insurer', label: 'Insurer dashboard', icon: '▦', insurer: true },
   { href: '/customer', label: 'Fleet dashboard', icon: '⌂' },
   { href: '/fleet', label: 'Vehicle register', icon: '▤' },
   { href: '/changes', label: 'Manage cover', icon: '⇄' },
@@ -26,7 +26,7 @@ const planned: NavItem[] = [
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
-  const items = nav.filter(i => !i.admin || canManageUsers(ctx));
+  const items = nav.filter(i => (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">

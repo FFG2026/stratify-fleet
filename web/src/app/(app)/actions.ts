@@ -7,6 +7,7 @@ import { rest, rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
 import { londonDate, londonMidnight, monthBounds, normaliseRegistration, parseDate } from '@/lib/dates';
 import { checkedId } from '@/lib/ids';
+import { getFleetPage } from '@/lib/data';
 import { memberEmail, memberRole } from '@/lib/members';
 import { createLimiter, lookupVehicle, type VehicleSummary } from '@/lib/vehicle-lookup';
 import type { ActionResult } from '@/components/useAction';
@@ -67,6 +68,22 @@ export async function removeVehicle(form: FormData): Promise<ActionResult> {
     refresh();
     return done('Coverage change recorded and added to the audit trail.');
   } catch (error) { return fail(error); }
+}
+
+// ---- find a vehicle's open cover from what the person has typed (used by the removal form)
+export type OpenCover = { id: string; registration: string; vehicle: string; policyId: string; policyRef: string; startsOn: string };
+const findAllowed = createLimiter(240);
+export async function findOpenCover(query: string, policyId?: string): Promise<{ ok: true; rows: OpenCover[]; total: number } | { ok: false; message: string }> {
+  const ctx = await requireContext();
+  if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+  if (!findAllowed(ctx.user.id)) return { ok: false, message: 'Too many searches just now. Try again in a moment.' };
+  try {
+    const q = String(query ?? '').trim();
+    if (!q) return { ok: true, rows: [], total: 0 };
+    const page = await getFleetPage({ q, status: 'open', policy: policyId || undefined, limit: '8' });
+    const ref = (id: string) => ctx.policies.find(p => p.id === id)?.reference ?? '';
+    return { ok: true, total: page.total, rows: page.rows.map(r => ({ id: r.id, registration: r.registration, vehicle: r.make, policyId: r.policy_id, policyRef: ref(r.policy_id), startsOn: r.starts_on })) };
+  } catch (error) { return { ok: false, message: messageOf(error) }; }
 }
 
 // ---- registration lookup (DVLA). The key never leaves the server.
