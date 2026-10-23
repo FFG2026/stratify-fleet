@@ -13,7 +13,7 @@ export default async function Insurer({ searchParams }: { searchParams: Promise<
     <PageHeader title="Insurer dashboard" subtitle="Confidence across every fleet in your book."
       actions={<><LinkButton href="/fleet">View vehicle register</LinkButton><LinkButton href="/reconciliation" primary>Review reconciliation →</LinkButton></>} />
   );
-  if (!isInsurerSide(ctx)) return (<>{header}<section className="panel"><div className="panel-body"><h2>Insurer dashboard access</h2><p>This dashboard requires insurer or platform administrator membership. Your current account has not been assigned this access.</p><Link className="button-link" href="/customer">Open your fleet dashboard →</Link></div></section></>);
+  if (!isInsurerSide(ctx)) return (<>{header}<section className="panel"><div className="panel-body"><h2>Insurer dashboard access</h2><p>This dashboard requires insurer or platform administrator membership. Your current account has not been assigned this access.</p><Link prefetch={false} className="button-link" href="/customer">Open your fleet dashboard →</Link></div></section></>);
   if (ctx.demo) return (<>{header}<StaticDashboard ctx={ctx} summary={demoSummary()} showOrgNote={false} /></>);
   try {
     const data = await getDashboard(insurer || undefined);

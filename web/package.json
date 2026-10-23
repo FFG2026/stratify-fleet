@@ -2,13 +2,16 @@
   "name": "stratify-web",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node tests/e2e/run.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

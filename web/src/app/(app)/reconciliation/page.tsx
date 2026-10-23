@@ -90,7 +90,7 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
                   <tr key={r.id}>
                     <td>{londonDateTime(r.generated_at)}</td><td>{(r.policy_id && ref(r.policy_id)) || 'Fleet-wide report'}</td>
                     <td>{r.total_vehicle_days}</td><td><Badge warn>{r.status}</Badge></td>
-                    <td><Link className="button-link" href={'?' + q}>Open report</Link></td>
+                    <td><Link prefetch={false} className="button-link" href={'?' + q}>Open report</Link></td>
                   </tr>
                 );
               })}

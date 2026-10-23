@@ -32,7 +32,7 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
   }
   const tab = (m: string, label: string) => {
     const q = new URLSearchParams(); q.set('mode', m); if (sp.policy) q.set('policy', sp.policy);
-    return <Link role="tab" href={'?' + q} className={mode === m ? 'active' : ''} aria-selected={mode === m}>{label}</Link>;
+    return <Link prefetch={false} role="tab" href={'?' + q} className={mode === m ? 'active' : ''} aria-selected={mode === m}>{label}</Link>;
   };
   const ref = (id: string) => ctx.policies.find(p => p.id === id)?.reference;
   const next = new URLSearchParams(); next.set('mode', 'remove'); if (sp.policy) next.set('policy', sp.policy); if (sp.rq) next.set('rq', sp.rq);
@@ -61,8 +61,8 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
                 </form>
                 <p className="form-note">Showing up to 25 open periods. Search to narrow the list.</p>
                 <div className="actions">
-                  {offset > 0 ? <Link className="button-link" href={nav(Math.max(0, offset - 25))}>Previous</Link> : <button disabled>Previous</button>}
-                  {offset + 25 < removal.total ? <Link className="button-link" href={nav(offset + 25)}>Next</Link> : <button disabled>Next</button>}
+                  {offset > 0 ? <Link prefetch={false} className="button-link" href={nav(Math.max(0, offset - 25))}>Previous</Link> : <button disabled>Previous</button>}
+                  {offset + 25 < removal.total ? <Link prefetch={false} className="button-link" href={nav(offset + 25)}>Next</Link> : <button disabled>Next</button>}
                 </div>
                 <RemoveVehicleForm today={t} allowed={allowed} periods={removal.rows.map(r => ({ id: r.id, label: `${r.registration} · ${ref(r.policy_id)} · from ${r.starts_on}` }))} />
               </div>

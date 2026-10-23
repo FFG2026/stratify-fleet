@@ -35,7 +35,7 @@ export function PageHeader({ title, subtitle, crumb = 'WORKSPACE', actions }: { 
 }
 
 export function LinkButton({ href, children, primary = false }: { href: string; children: ReactNode; primary?: boolean }) {
-  return <Link href={href} className={'button-link' + (primary ? ' primary' : '')}>{children}</Link>;
+  return <Link prefetch={false} href={href} className={'button-link' + (primary ? ' primary' : '')}>{children}</Link>;
 }
 
 export function Pagination({ total, offset, limit = 25, base, param = 'offset' }: { total: number; offset: number; limit?: number; base: URLSearchParams; param?: string }) {
@@ -45,8 +45,8 @@ export function Pagination({ total, offset, limit = 25, base, param = 'offset' }
     <div className="pagination">
       <span>{total ? offset + 1 : 0}–{Math.min(total, offset + limit)} of {total}</span>
       <div className="actions">
-        {prev ? <Link className="button-link" href={link(Math.max(0, offset - limit))}>Previous</Link> : <button disabled>Previous</button>}
-        {next ? <Link className="button-link" href={link(offset + limit)}>Next</Link> : <button disabled>Next</button>}
+        {prev ? <Link prefetch={false} className="button-link" href={link(Math.max(0, offset - limit))}>Previous</Link> : <button disabled>Previous</button>}
+        {next ? <Link prefetch={false} className="button-link" href={link(offset + limit)}>Next</Link> : <button disabled>Next</button>}
       </div>
     </div>
   );

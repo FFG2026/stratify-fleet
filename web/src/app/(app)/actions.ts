@@ -80,7 +80,7 @@ export async function lookupRegistration(registration: string): Promise<{ ok: tr
 }
 
 // ---- reconciliation
-export async function generateReport(form: FormData): Promise<ActionResult | void> {
+export async function generateReport(form: FormData): Promise<ActionResult> {
   const ctx = await requireContext();
   if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
   let id: string, month: string, policy: string;
@@ -93,8 +93,7 @@ export async function generateReport(form: FormData): Promise<ActionResult | voi
     if (!policies.length) return { ok: false, message: 'Policy not accessible.' };
     id = await rpc<string>('generate_reconciliation', { p_fleet_id: policies[0].fleet_id, p_policy_id: policy, p_month: month + '-01' });
   } catch (error) { return fail(error); }
-  refresh();
-  redirect(`/reconciliation?month=${month}&policy=${policy}&report=${id}`);
+  return { ok: true, message: 'Saved provisional reconciliation generated.', redirectTo: `/reconciliation?month=${month}&policy=${policy}&report=${id}` };
 }
 
 // ---- people

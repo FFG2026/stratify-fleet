@@ -39,13 +39,15 @@ const report = { id: 'e0000000-0000-4000-8000-000000000001', fleet_id: ids.f1, p
 const lines = periods.filter(p => p.fleet_id === ids.f1).slice(0, 27).map((p, i) => ({ id: i + 1, reconciliation_id: report.id, fleet_id: ids.f1, policy_id: ids.p1, registration: p.vehicle.registration, days: 30, first_charged_date: '2026-10-01', last_charged_date: '2026-10-30', daily_rate: '8.2100', charge: '246.30' }));
 
 export function startFake(port) {
-  const calls = [];
+  const calls = [], reqlog = [];
   const byToken = token => Object.entries(users).find(([email]) => token === 'tok-' + email);
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     let raw = ''; for await (const c of req) raw += c;
     const body = raw ? JSON.parse(raw) : null;
     const json = (status, data, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json', ...headers }); res.end(req.method === 'HEAD' ? undefined : JSON.stringify(data)); };
+    if (url.pathname === '/__log') return json(200, reqlog);
+    if (!url.pathname.startsWith('/__')) reqlog.push(`${new Date().toISOString().slice(14, 23)} ${req.method} ${url.pathname}${url.search.slice(0, 60)} <- ${((req.headers.authorization || '').slice(11, 26))}`);
     if (url.pathname === '/__calls') return json(200, calls);
     if (url.pathname === '/__reset') { calls.length = 0; return json(200, {}); }
     if (url.pathname === '/auth/v1/token') {
@@ -77,10 +79,10 @@ export function startFake(port) {
       const name = path.slice(4);
       calls.push({ rpc: name, as: email, body });
       if (name === 'list_members') return json(200, body.p_org === ids.f1 ? [
-        { id: 'm0000000-0000-4000-8000-000000000001', user_id: users['customer@example.test'].id, email: 'customer@example.test', role: 'fleet_admin', active: true, pending: false },
-        { id: 'm0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'driver@example.test', role: 'fleet_manager', active: true, pending: false },
-        { id: 'i0000000-0000-4000-8000-000000000003', user_id: null, email: 'pending@example.test', role: 'fleet_accounts', active: true, pending: true }
-      ] : [{ id: 'm0000000-0000-4000-8000-000000000009', user_id: u.id, email, role: u.role, active: true, pending: false }]);
+        { id: 'b0000000-0000-4000-8000-000000000001', user_id: users['customer@example.test'].id, email: 'customer@example.test', role: 'fleet_admin', active: true, pending: false },
+        { id: 'b0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'driver@example.test', role: 'fleet_manager', active: true, pending: false },
+        { id: 'c0000000-0000-4000-8000-000000000003', user_id: null, email: 'pending@example.test', role: 'fleet_accounts', active: true, pending: true }
+      ] : [{ id: 'b0000000-0000-4000-8000-000000000009', user_id: u.id, email, role: u.role, active: true, pending: false }]);
       if (name === 'add_member') return json(200, 'invited');
       if (name === 'generate_reconciliation') return json(200, report.id);
       if (name === 'add_vehicle_cover' || name === 'remove_vehicle_cover') return json(200, 'f0000000-0000-4000-8000-000000000001');

@@ -10,7 +10,7 @@ const Attention = ({ icon, title, text, href }: { icon: string; title: string; t
   <div className="attention">
     <span className="attention-icon">{icon}</span>
     <div><h3>{title}</h3><p>{text}</p></div>
-    {href && <Link className="textbtn" href={href} aria-label={title}>↗</Link>}
+    {href && <Link prefetch={false} className="textbtn" href={href} aria-label={title}>↗</Link>}
   </div>
 );
 
@@ -39,7 +39,7 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
       ]} />
       <div className="grid-two">
         <div className="panel">
-          <div className="panel-header"><h2>Latest changes</h2><Link className="textbtn" href="/changes">Manage cover →</Link></div>
+          <div className="panel-header"><h2>Latest changes</h2><Link prefetch={false} className="textbtn" href="/changes">Manage cover →</Link></div>
           <div className="panel-body"><div className="timeline">
             {events.map(e => (
               <div className="event" key={e.id}>
@@ -69,7 +69,7 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
                   <td><div className="company"><span className="company-logo">{f.fleet_name.slice(0, 1)}</span><strong>{f.fleet_name}</strong></div></td>
                   <td>{orgName(ctx, f.insurer_id)}</td>
                   <td>{fmt(f.vehicles_total)}</td><td>{fmt(f.vehicles_on_cover)}</td><td>{fmt(f.vehicles_scheduled)}</td>
-                  <td>{pol ? <Link className="textbtn" href={'/fleet?policy=' + pol.id}>Open fleet ↗</Link> : '—'}</td>
+                  <td>{pol ? <Link prefetch={false} className="textbtn" href={'/fleet?policy=' + pol.id}>Open fleet ↗</Link> : '—'}</td>
                 </tr>
               );
             })}
@@ -98,7 +98,7 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
       ]} />
       <div className="grid-two">
         <div className="panel">
-          <div className="panel-header"><h2>Coverage activity</h2><Link className="textbtn" href="/changes">Manage cover →</Link></div>
+          <div className="panel-header"><h2>Coverage activity</h2><Link prefetch={false} className="textbtn" href="/changes">Manage cover →</Link></div>
           <div className="panel-body"><div className="timeline">
             {summary.events.slice(0, 5).map(e => (
               <div className="event" key={e.id}><strong>{e.registration}</strong> · {e.action.replaceAll('_', ' ')}<p>{londonDateTime(e.created_at)}</p></div>
@@ -126,7 +126,7 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
                 <tr key={o.id}>
                   <td><div className="company"><span className="company-logo">{o.name.slice(0, 1)}</span><strong>{o.name}</strong></div></td>
                   <td>{names.join(', ') || '—'}</td><td>{policies.length}</td>
-                  <td>{policies.length ? <Link className="textbtn" href={'/fleet?policy=' + policies[0].id}>Open fleet ↗</Link> : '—'}</td>
+                  <td>{policies.length ? <Link prefetch={false} className="textbtn" href={'/fleet?policy=' + policies[0].id}>Open fleet ↗</Link> : '—'}</td>
                 </tr>
               );
             })}
@@ -135,7 +135,7 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
         {!customers.length && <div className="empty">No authorised organisations yet. Your administrator must assign organisation membership.</div>}
       </section>
       <div className="panel">
-        <div className="panel-header"><h2>Recent coverage periods</h2><Link className="textbtn" href="/fleet">View vehicle register →</Link></div>
+        <div className="panel-header"><h2>Recent coverage periods</h2><Link prefetch={false} className="textbtn" href="/fleet">View vehicle register →</Link></div>
         <FleetTable ctx={ctx} rows={summary.recent} />
       </div>
     </>
