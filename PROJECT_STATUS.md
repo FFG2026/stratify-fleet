@@ -32,7 +32,7 @@ The alternate fresh schema drafted before the connection was available was disca
 - Saved database reconciliation generation, paginated line retrieval and CSV rules snapshot.
 - Read-only fictional demo mode, local setup, bootstrap guidance, recovered migrations and optional clean-dev seed.
 
-## Verification
+## Initial milestone verification
 - Eight automated Node tests PASS: date boundaries, leap year, removal/re-addition, DST midnight conversion, registration input, CSV safety, existing-schema adapter, API session/origin guards, HttpOnly login cookie, 600-row batch pagination and RPC mapping.
 - Syntax checks PASS.
 - Database transaction test PASS under authenticated fleet_admin: own-tenant read, other-tenant read denial, add/remove/re-add, overlap rejection, audit and pending MID records, direct table-write denial, backdate denial, unaffiliated identity denial. Test data was rolled back.
@@ -48,9 +48,9 @@ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_ORIGIN, PORT, DEMO_MODE. No service-
 - Date-only preview: London calendar labels, addition included, removal excluded.
 - Saved reports: use existing database rules/default snapshot; preview and saved values may differ for partial days, rates or configured rules.
 - Insurer agreement needed on same-day cover, backdates, rate changes, taxes/fees, expiry, rounding and corrections.
-- Report finalisation/reopening and approvals are not implemented.
+- Saved report reopening is implemented; finalisation and approvals are not implemented.
 - Access cookie expires after at most one hour; session refresh/recovery and onboarding UI are outstanding.
-- Full workspace batch loading is suitable only for the current development stage; introduce server-side policy/customer filters and pagination for 100+ customers.
+- Fleet data is paginated on the server. Organisation/policy metadata and a chosen saved report's full lines are still fetched in batches; add scoped metadata loading and streamed exports as the dataset grows.
 - User management and insurer/customer provisioning UI, white-label tenancy, claims/FNOL, compliance and fleet CRM are planned.
 - No real user was provisioned and no customer email was sent.
 
@@ -70,7 +70,7 @@ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_ORIGIN, PORT, DEMO_MODE. No service-
 - Changed API queries remain protected by the existing user-token RLS; hidden report IDs return 404 before reading lines.
 - Both vehicle change forms disable submission for read-only roles.
 - Added tests for query injection/range validation, the last page of a 600-vehicle fleet, stored report reopening, cross-tenant hidden reports, bounded dashboard loading and six-screen rendering.
-- Added GitHub Actions Node 22/24 checks. Validation status at this commit: JavaScript syntax and in-process six-screen rendering checks passed; full Node and live browser tests are pending because the selected execution environment became unavailable mid-turn.
+- Added GitHub Actions Node 22/24 checks. Validation: GitHub Actions passed syntax and automated tests on Node 22 and 24 (run 39938141459), after the selected local environment became unavailable. In-process six-screen rendering checks also passed. Real browser and live sign-in tests remain outstanding.
 - No schema changes, real-user provisioning, invitation emails, domain DNS edits or public deployment were made in this increment.
 
-Next: confirm GitHub CI, create the first verified administrator account, run real browser sign-in and coverage/report flows on a working preview host, then agree final billing rules and implement approvals/finalisation.
+Next: create the first verified administrator account, run real browser sign-in and coverage/report flows on a working preview host, then agree final billing rules and implement approvals/finalisation.

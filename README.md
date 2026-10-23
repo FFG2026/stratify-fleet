@@ -39,7 +39,7 @@ This is the first development milestone, not a production insurance system. No p
 
 The app uses a small dependency-free Node server and ES modules because this repository was empty and the prior prototype source could not be retrieved. It does not claim to reproduce the inaccessible prototype exactly.
 
-Sessions expire after at most one hour; refresh, password recovery, invitations/membership UI, report history/reopening/finalisation, backdating approvals, insurer acceptance, white-label provisioning, claims and driver compliance are later work. Reads fetch database batches of 500 (not just the first 600 vehicles), then paginate in the UI. Server-side search and scoped reporting must replace full-workspace loading before large-scale rollout.
+Sessions expire after at most one hour; refresh, password recovery, invitations/membership UI, report finalisation, backdating approvals, insurer acceptance, white-label provisioning, claims and driver compliance are later work. Vehicle searches use server-side 25-row pages. The dashboard fetches five recent periods and database totals; organisation/policy metadata is still loaded in batches. Saved report line exports retrieve all lines in 500-row batches.
 
 The existing database permits backdating for specific privileged roles. This portal blocks backdated edits pending an approval workflow; those underlying database permissions were preserved.
 
@@ -52,4 +52,4 @@ The vehicle register uses database pagination and search; the dashboard loads on
 
 The domain **stratifyfleet.co.uk** has been purchased. It is not connected to hosting yet; keep APP_ORIGIN on localhost for development. No DNS changes have been made.
 
-GitHub Actions runs syntax and unit/API/render checks on Node 22 and 24. The selected local environment became unavailable during this increment, so check the pull request's CI results before treating these changes as verified. Browser sign-in and production readiness are still outstanding.
+GitHub Actions runs syntax and unit/API/render checks on Node 22 and 24. The selected local environment became unavailable during this increment; GitHub CI subsequently passed syntax and automated checks on Node 22 and 24. Browser sign-in and production readiness are still outstanding.
