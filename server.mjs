@@ -153,6 +153,27 @@ export async function handleRequest(req,res) {
         const [reports,lines]=await Promise.all([sb('/rest/v1/reconciliations?select=*&id=eq.'+id,access),allRows('reconciliation_lines',access,'reconciliation_id=eq.'+id+'&order=id.asc')]);
         return send(201,{report:reports[0],lines});
       }
+      // Live dashboard figures. Counts run under the caller's own token, so row-level security limits every figure to
+      // what that person may see; the optional insurer filter only narrows it further.
+      if(url.pathname === '/api/dashboard' && req.method === 'GET') {
+        const insurer=url.searchParams.get('insurer');
+        if(insurer)checkedId(insurer);
+        const fleets=(await sb('/rest/v1/fleet_overview?select=*&order=fleet_name.asc&limit=1000',access)).filter(f=>!insurer||f.insurer_id===insurer);
+        const empty={added7:0,removed7:0,scheduledAdds:0,scheduledRemovals:0,provisionalReports:0};
+        if(!fleets.length)return send(200,{fleets,counts:empty,events:[]});
+        const scope='&fleet_id=in.('+fleets.map(f=>checkedId(f.fleet_id)).join(',')+')';
+        const now=new Date(),iso=ms=>encodeURIComponent(new Date(now.getTime()+ms).toISOString()),day=86400000;
+        const count=async(table,query)=>(await sb('/rest/v1/'+table+'?select=id&'+query+scope,access,{method:'HEAD',withCount:true,headers:{Prefer:'count=exact'}})).total;
+        const [added7,removed7,scheduledAdds,scheduledRemovals,provisionalReports,events]=await Promise.all([
+          count('coverage_events','event_type=eq.cover_added&recorded_at=gte.'+iso(-7*day)),
+          count('coverage_events','event_type=eq.cover_removed&recorded_at=gte.'+iso(-7*day)),
+          count('coverage_periods','voided_at=is.null&cover_start=gt.'+iso(0)+'&cover_start=lte.'+iso(7*day)),
+          count('coverage_periods','voided_at=is.null&cover_end=gt.'+iso(0)+'&cover_end=lte.'+iso(7*day)),
+          count('reconciliations','status=eq.provisional&generated_at=gte.'+iso(-30*day)),
+          sb('/rest/v1/coverage_events?select=id,fleet_id,event_type,effective_at,recorded_at,details&order=recorded_at.desc&limit=8'+scope,access)
+        ]);
+        return send(200,{fleets,counts:{added7,removed7,scheduledAdds,scheduledRemovals,provisionalReports},events});
+      }
       // User management. Every rule is enforced again inside the database functions; this layer only validates input.
       if(url.pathname === '/api/members' && req.method === 'GET') {
         const org=checkedId(url.searchParams.get('org'));
