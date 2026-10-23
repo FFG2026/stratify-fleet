@@ -23,7 +23,7 @@ function stubFetch(options={}){
   calls.push([url,requestOptions]);const parsed=new URL(url);const query=parsed.searchParams;
   let data=[],status=200;const responseHeaders={};
   if(url.includes('/auth/v1/token'))data={access_token:'test-session',expires_in:3600};
-  else if(url.includes('/auth/v1/user'))data={id:'11111111-1111-4111-8111-111111111111',email:'test@example.invalid'};
+  else if(url.includes('/auth/v1/user'))data={id:'11111111-1111-4111-8111-111111111111',email:options.demoUser?'demo@stratifyfleet.co.uk':'test@example.invalid',email_confirmed_at:'2026-10-23T12:00:00Z'};
   else if(url.includes('/rpc/add_vehicle_cover'))data='created-period';
   else if(url.includes('/rest/v1/policies'))data=[{id:policy,fleet_id:'f',policy_number:'TEST',valid_from:'2026-01-01'}];
   else if(url.includes('/rest/v1/organisations'))data=[{id:'f',kind:'fleet',name:'Test Fleet'}];
@@ -101,4 +101,22 @@ test('coverage additions still call the permission-checked RPC with London midni
   assert.equal(add.status,201);const rpc=JSON.parse(mock.calls.find(([url])=>url.includes('/rpc/add_vehicle_cover'))[1].body);
   assert.equal(rpc.p_fleet_id,'f');assert.equal(rpc.p_effective_at,'2099-07-01T23:00:00.000Z');assert.equal(rpc.p_registration,'AB26CDE');
  }finally{mock.restore();}
+});
+test('dedicated authenticated demo account receives only fictional records and cannot mutate',async()=>{
+ const mock=stubFetch({demoUser:true});
+ try{
+  assert.equal((await request('/api/workspace')).status,401);
+  assert.equal((await request('/api/demo','POST',{},headers)).status,403);
+  assert.equal((await request('/api/me','GET',null,headers)).json().demo,true);
+  const workspace=(await request('/api/workspace','GET',null,headers)).json();
+  assert.equal(workspace.coverage_periods.length,1285);
+  assert.equal(workspace.coverage_periods.filter(r=>r.policy_id==='demo-policy-atlas').length,600);
+  assert.equal(workspace.organisations.filter(o=>o.kind==='insurer').length,3);
+  assert.equal(workspace.organisations.filter(o=>o.kind==='customer').length,4);
+  for(const path of ['/api/coverage','/api/removal','/api/reconciliation'])assert.equal((await request(path,'POST',{},headers)).status,403);
+  assert.equal((await request('/api/reconciliations/'+report,'GET',null,headers)).status,404);
+  assert(!mock.calls.some(([url])=>url.includes('/rest/v1/')));
+ }finally{mock.restore();}
+ const normal=stubFetch();
+ try{assert.equal((await request('/api/me','GET',null,headers)).json().demo,false);}finally{normal.restore();}
 });

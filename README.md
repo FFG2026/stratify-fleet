@@ -54,9 +54,11 @@ The domain **stratifyfleet.co.uk** has been purchased. It is not connected to ho
 
 GitHub Actions runs syntax and unit/API/render checks on Node 22 and 24. The selected local environment became unavailable during this increment; GitHub CI subsequently passed syntax and automated checks on Node 22 and 24. Browser sign-in and production readiness are still outstanding.
 
-## Vercel hosting
-The repository includes a Vercel Node function adapter in api/index.mjs, static asset build in scripts/build.mjs, and vercel.json routing. npm run build generates dist/; no additional dependencies are needed. Local npm run dev still uses the same shared request handler.
 
-Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in the Vercel project, with DEMO_MODE=false. APP_ORIGIN should be the canonical HTTPS address. Only configured/system-provided Vercel deployment origins are accepted for writes. The access cookie is Secure/HttpOnly on HTTPS. Never add a service-role key.
+### Dedicated demo account
 
-Hosting preparation passed 22 tests, syntax checks and the static build. Deployment is currently BLOCKED: Vercel denied access to the intended Future FG workspace, and automatic approval review rejected creating the project while that workspace authorisation was unresolved. No project or deployment was created. Do not describe stratifyfleet.co.uk as live.
+The approved flowing-S logo is on login and sidebar. `/demo` provides a dedicated demo sign-in page. Sign in with a confirmed Supabase account whose email is `demo@stratifyfleet.co.uk` (or the server-side `DEMO_ACCOUNT_EMAIL` setting). Main accounts continue to use their real authorised workspace. There are no public demo buttons or password-free endpoints.
+
+Account provisioning: Supabase Authentication → Users → Add user → Create new user, email `demo@stratifyfleet.co.uk`, choose a password, Auto Confirm User enabled. Do not assign any organisation memberships to this user. Creating the user is still pending; no account or password was created by this code change.
+
+The server validates every session with Supabase Auth before selecting the fixture workspace. The demo account can read three fictional insurers, four fleets and 1,285 vehicles; it cannot access database reports, save changes or submit to MID. September 2026 is the initial reporting month. Keep `DEMO_MODE=false` on connected deployments.

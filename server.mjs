@@ -14,7 +14,8 @@ const origin = process.env.APP_ORIGIN || (process.env.VERCEL_PROJECT_PRODUCTION_
 const allowedOrigins=new Set([origin,...['VERCEL_URL','VERCEL_PROJECT_PRODUCTION_URL','VERCEL_BRANCH_URL'].filter(key=>process.env[key]).map(key=>'https://'+process.env[key])]);
 const secure = new URL(origin).protocol === 'https:' ? '; Secure' : '';
 const cookieName = secure ? '__Host-stratify' : 'stratify';
-const routes = new Map([['/', ['index.html','text/html']], ['/app.js',['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/coverage.mjs',['../lib/coverage.mjs','text/javascript']]]);
+const demoAccountEmail=(process.env.DEMO_ACCOUNT_EMAIL||'demo@stratifyfleet.co.uk').toLowerCase();
+const routes = new Map([['/demo',['index.html','text/html']],['/stratify-logo.png',['stratify-logo.png','image/png']],['/', ['index.html','text/html']], ['/app.js',['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/coverage.mjs',['../lib/coverage.mjs','text/javascript']]]);
 const failure = (message, status = 400) => Object.assign(new Error(message), { status });
 function token(req) {
   const value = (req.headers.cookie || '').split('; ').find(c => c.startsWith(cookieName + '='));
@@ -61,7 +62,7 @@ export async function handleRequest(req,res) {
     if(url.pathname.startsWith('/api/')) {
       if(demoMode) {
         if(req.method !== 'GET') throw failure('Demo is read-only. Connect the development database to save changes.',403);
-        if(url.pathname === '/api/me') return send(200,{email:'Demo workspace',demo:true});
+        if(url.pathname === '/api/me') return send(200,{email:'Prototype demo',demo:true});
         if(url.pathname === '/api/workspace') return send(200,demo);
         throw failure('Not found.',404);
       }
@@ -77,10 +78,16 @@ export async function handleRequest(req,res) {
       }
       const access=token(req); if(!access) throw failure('Please sign in.',401);
       const user=await sb('/auth/v1/user',access);
-      if(url.pathname === '/api/me' && req.method === 'GET') return send(200,{email:user.email});
+      const isDemoAccount=user.email?.toLowerCase()===demoAccountEmail && !!user.email_confirmed_at;
+      if(url.pathname === '/api/me' && req.method === 'GET') return send(200,{email:user.email,demo:isDemoAccount});
       if(url.pathname === '/api/logout' && req.method === 'POST') {
         await sb('/auth/v1/logout',access,{method:'POST'});
         res.setHeader('Set-Cookie',cookieName+'=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+secure);return send(200,{ok:true});
+      }
+      if(isDemoAccount){
+        if(req.method !== 'GET')throw failure('The demo account is read-only.',403);
+        if(url.pathname === '/api/workspace')return send(200,demo);
+        throw failure('Not available in the demo account.',404);
       }
       if(url.pathname === '/api/workspace' && req.method === 'GET') {
         const recent=fleetQuery(new URLSearchParams({limit:'5'})).query;

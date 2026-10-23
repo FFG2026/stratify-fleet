@@ -85,3 +85,16 @@ All nine navigation entries are visible. Restricted platform/insurer dashboards 
 Validation: syntax checks, 23 automated tests, static build passed. Browser visual QA was blocked by the cloud browser URL policy; responsive rules are present but rendered desktop/mobile appearance is unverified.
 
 User manually deployed feat/portal-foundation to Vercel and configured Supabase settings; screenshots show successful sign-in as owen@dcfgroup.co.uk, with no authorised organisations. Administrator membership still needs provisioning. Vercel team API access remains unavailable, so this change is pushed to GitHub; deployment readiness is not verified. Custom domain is not yet linked.
+
+
+## Approved logo and dedicated demo account — 23 October 2026
+
+Added the approved flowing-S Stratify logo to login and sidebar, static build and local file whitelist.
+
+User clarified that fictional data must belong to a dedicated demo login, not be available through the main account or public Explore demo buttons. Removed the unshipped cookie-based public demo. `/demo` is a dedicated sign-in page, using normal Supabase email/password authentication. Server verifies each user and selects fixtures only for the confirmed email `demo@stratifyfleet.co.uk` (configurable through DEMO_ACCOUNT_EMAIL). Main users retain their existing RLS-scoped workspace. Demo user has no organisation memberships and must not be granted any.
+
+User provisioning remains pending: existing Supabase lookup found only owen@dcfgroup.co.uk, no demo user. No Supabase users, memberships or permissions changed. Create the demo user through the dashboard with Auto Confirm enabled; choose its password there.
+
+Dataset: Alder Mutual, Northstar Assurance, Haven Commercial; Atlas Logistics (600), Swiftline Couriers (180), Meridian Transport (420), Oak & Co Services (85); 1,285 vehicles, four policies, September additions/removals and audit examples. Demo is read-only; no database REST queries or writes are issued for demo users. Existing preview CSV and pagination supported.
+
+Validation: syntax checks, 24 tests, static build. Browser visual QA remains blocked by browser URL policy. Vercel deployment remains a manual user step due unavailable team access.
