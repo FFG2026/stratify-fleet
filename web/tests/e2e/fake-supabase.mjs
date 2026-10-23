@@ -69,6 +69,8 @@ export function startFake(port) {
     const [email, u] = found;
     const sees = id => u.see === 'all' || u.see.includes(id);
     const q = url.searchParams, off = Number(q.get('offset') || 0), lim = Number(q.get('limit') || 1000);
+    // The real database rejects a repeated select parameter; so does this stand-in.
+    if (q.getAll('select').length > 1) return json(400, { message: 'Invalid query: select given more than once' });
     const page = (rows, headers = {}) => {
       const slice = rows.slice(off, off + lim);
       const range = slice.length ? `${off}-${off + slice.length - 1}/${rows.length}` : `*/${rows.length}`;

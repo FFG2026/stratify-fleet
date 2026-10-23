@@ -63,7 +63,9 @@ export async function countRows(table: string, query: string): Promise<number> {
   const env = getEnv();
   if (!env) throw new RestError('The database is not configured.', 503);
   const token = await accessToken();
-  const response = await fetch(`${env.url}/rest/v1/${table}?select=id&${query}`, {
+  // fleetQuery already carries its own select; a second select makes the database reject the request (400).
+  const target = /(^|&)select=/.test(query) ? query : 'select=id&' + query;
+  const response = await fetch(`${env.url}/rest/v1/${table}?${target}`, {
     method: 'HEAD', cache: 'no-store', signal: AbortSignal.timeout(15000),
     headers: { apikey: env.key, Authorization: 'Bearer ' + token, Prefer: 'count=exact' }
   });
