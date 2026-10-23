@@ -1,0 +1,118 @@
+// A small stand-in for Supabase (auth + REST) used ONLY by the browser test. It is not a model of row-level security:
+// real tenant isolation is proven by the database tests in ../../../tests/*.sql. This checks the portal's screens and forms.
+import { createServer } from 'node:http';
+
+const ids = {
+  platform: '10000000-0000-4000-8000-000000000001', i1: '10000000-0000-4000-8000-000000000002', i2: '10000000-0000-4000-8000-000000000003',
+  f1: '20000000-0000-4000-8000-000000000001', f2: '20000000-0000-4000-8000-000000000002', f3: '20000000-0000-4000-8000-000000000003',
+  p1: '30000000-0000-4000-8000-000000000001', p2: '30000000-0000-4000-8000-000000000002', p3: '30000000-0000-4000-8000-000000000003'
+};
+const users = {
+  'platform@example.test': { id: 'a0000000-0000-4000-8000-000000000001', role: 'platform_super_admin', org: ids.platform, see: 'all' },
+  'insurer@example.test': { id: 'a0000000-0000-4000-8000-000000000002', role: 'insurer_admin', org: ids.i1, see: [ids.i1, ids.f1, ids.f2] },
+  'customer@example.test': { id: 'a0000000-0000-4000-8000-000000000003', role: 'fleet_admin', org: ids.f1, see: [ids.f1] },
+  'demo@stratifyfleet.co.uk': { id: 'a0000000-0000-4000-8000-000000000004', role: null, org: null, see: [] },
+  'nobody@example.test': { id: 'a0000000-0000-4000-8000-000000000005', role: null, org: null, see: [] }
+};
+const allOrgs = [
+  { id: ids.platform, kind: 'platform', name: 'Stratify Platform', insurer_id: null },
+  { id: ids.i1, kind: 'insurer', name: 'Example Mutual', insurer_id: null },
+  { id: ids.i2, kind: 'insurer', name: 'Sample Underwriters', insurer_id: null },
+  { id: ids.f1, kind: 'fleet', name: 'Northbank Logistics', insurer_id: ids.i1 },
+  { id: ids.f2, kind: 'fleet', name: 'Riverside Couriers', insurer_id: ids.i1 },
+  { id: ids.f3, kind: 'fleet', name: 'Hilltop Plumbing', insurer_id: ids.i2 }
+];
+const allPolicies = [
+  { id: ids.p1, policy_number: 'POL-1', fleet_id: ids.f1, insurer_id: ids.i1, valid_from: '2026-01-01', valid_to: null },
+  { id: ids.p2, policy_number: 'POL-2', fleet_id: ids.f2, insurer_id: ids.i1, valid_from: '2026-01-01', valid_to: null },
+  { id: ids.p3, policy_number: 'POL-3', fleet_id: ids.f3, insurer_id: ids.i2, valid_from: '2026-01-01', valid_to: null }
+];
+const periods = [];
+for (const [fleet, policy, prefix, n] of [[ids.f1, ids.p1, 'AB', 30], [ids.f2, ids.p2, 'CD', 5], [ids.f3, ids.p3, 'EF', 4]]) {
+  for (let i = 0; i < n; i++) periods.push({
+    id: `c${fleet.slice(1, 2)}000000-0000-4000-8000-${String(i).padStart(12, '0')}`, vehicle_id: `d${fleet.slice(1, 2)}000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    fleet_id: fleet, policy_id: policy, cover_start: '2026-01-01T09:00:00Z', cover_end: i % 10 === 9 ? '2026-03-17T17:00:00Z' : null, voided_at: null,
+    vehicle: { registration: `${prefix}${String(10 + i)}XYZ`, make_model: 'Example Van ' + i }
+  });
+}
+const report = { id: 'e0000000-0000-4000-8000-000000000001', fleet_id: ids.f1, policy_id: ids.p1, month_start: '2026-10-01', status: 'provisional', rules_source: 'default-assumption', rules_snapshot: { start_day_charged: true, end_day_charged: true }, generated_at: '2026-10-20T10:00:00Z', total_vehicle_days: 810, opening_vehicles: 27, additions: 0, removals: 0, closing_vehicles: 27, premium_net: '6650.10' };
+const lines = periods.filter(p => p.fleet_id === ids.f1).slice(0, 27).map((p, i) => ({ id: i + 1, reconciliation_id: report.id, fleet_id: ids.f1, policy_id: ids.p1, registration: p.vehicle.registration, days: 30, first_charged_date: '2026-10-01', last_charged_date: '2026-10-30', daily_rate: '8.2100', charge: '246.30' }));
+
+export function startFake(port) {
+  const calls = [];
+  const byToken = token => Object.entries(users).find(([email]) => token === 'tok-' + email);
+  const server = createServer(async (req, res) => {
+    const url = new URL(req.url, 'http://x');
+    let raw = ''; for await (const c of req) raw += c;
+    const body = raw ? JSON.parse(raw) : null;
+    const json = (status, data, headers = {}) => { res.writeHead(status, { 'Content-Type': 'application/json', ...headers }); res.end(req.method === 'HEAD' ? undefined : JSON.stringify(data)); };
+    if (url.pathname === '/__calls') return json(200, calls);
+    if (url.pathname === '/__reset') { calls.length = 0; return json(200, {}); }
+    if (url.pathname === '/auth/v1/token') {
+      const email = String(body?.email || '').toLowerCase(), u = users[email];
+      if (!u || body.password !== 'pw') return json(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
+      const now = Math.floor(Date.now() / 1000);
+      const jwt = 'x.' + Buffer.from(JSON.stringify({ sub: u.id, email, exp: now + 3600, role: 'authenticated', aud: 'authenticated' })).toString('base64url') + '.x';
+      void jwt;
+      return json(200, { access_token: 'tok-' + email, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + email, user: { id: u.id, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } });
+    }
+    const token = (req.headers.authorization || '').replace('Bearer ', '');
+    const found = byToken(token);
+    if (url.pathname === '/auth/v1/user') {
+      if (!found) return json(401, { message: 'invalid JWT' });
+      return json(200, { id: found[1].id, email: found[0], aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
+    }
+    if (url.pathname === '/auth/v1/logout') return json(204, {});
+    if (!found) return json(401, { message: 'JWT expired' });
+    const [email, u] = found;
+    const sees = id => u.see === 'all' || u.see.includes(id);
+    const q = url.searchParams, off = Number(q.get('offset') || 0), lim = Number(q.get('limit') || 1000);
+    const page = (rows, headers = {}) => {
+      const slice = rows.slice(off, off + lim);
+      const range = slice.length ? `${off}-${off + slice.length - 1}/${rows.length}` : `*/${rows.length}`;
+      return json(off >= rows.length && rows.length ? 416 : 200, slice, { 'Content-Range': range, ...headers });
+    };
+    const path = url.pathname.replace('/rest/v1/', '');
+    if (path.startsWith('rpc/')) {
+      const name = path.slice(4);
+      calls.push({ rpc: name, as: email, body });
+      if (name === 'list_members') return json(200, body.p_org === ids.f1 ? [
+        { id: 'm0000000-0000-4000-8000-000000000001', user_id: users['customer@example.test'].id, email: 'customer@example.test', role: 'fleet_admin', active: true, pending: false },
+        { id: 'm0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'driver@example.test', role: 'fleet_manager', active: true, pending: false },
+        { id: 'i0000000-0000-4000-8000-000000000003', user_id: null, email: 'pending@example.test', role: 'fleet_accounts', active: true, pending: true }
+      ] : [{ id: 'm0000000-0000-4000-8000-000000000009', user_id: u.id, email, role: u.role, active: true, pending: false }]);
+      if (name === 'add_member') return json(200, 'invited');
+      if (name === 'generate_reconciliation') return json(200, report.id);
+      if (name === 'add_vehicle_cover' || name === 'remove_vehicle_cover') return json(200, 'f0000000-0000-4000-8000-000000000001');
+      return json(200, null);
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') return json(405, { message: 'writes must go through functions' });
+    if (path === 'organisations') return page(allOrgs.filter(o => sees(o.id)));
+    if (path === 'policies') {
+      const id = (q.get('id') || '').replace('eq.', '');
+      return page(allPolicies.filter(p => sees(p.fleet_id) && (!id || p.id === id)));
+    }
+    if (path === 'memberships') return json(200, u.role ? [{ organisation_id: u.org, role: u.role, active: true }] : []);
+    if (path === 'coverage_periods') {
+      let rows = periods.filter(p => sees(p.fleet_id));
+      const pol = (q.get('policy_id') || '').replace('eq.', ''); if (pol) rows = rows.filter(p => p.policy_id === pol);
+      const id = (q.get('id') || '').replace('eq.', ''); if (id) rows = rows.filter(p => p.id === id);
+      if (q.get('cover_end') === 'is.null') rows = rows.filter(p => !p.cover_end);
+      if (q.get('cover_end') === 'not.is.null') rows = rows.filter(p => p.cover_end);
+      const search = q.get('vehicle.or'); if (search) { const m = /registration\.ilike\.\*([^,]*)\*/.exec(search); if (m) rows = rows.filter(p => p.vehicle.registration.toLowerCase().includes(m[1].toLowerCase())); }
+      if (q.get('select') === 'id') return page(rows);
+      return page(rows);
+    }
+    if (path === 'audit_logs') return page([{ id: 1, occurred_at: '2026-10-22T10:00:00Z', action: 'coverage.added', entity_type: 'coverage_period', before_state: null, after_state: { registration: 'AB10XYZ' } }].filter(() => u.see === 'all' || u.see.length));
+    if (path === 'fleet_overview') return page(allOrgs.filter(o => o.kind === 'fleet' && sees(o.id)).map(o => ({ fleet_id: o.id, fleet_name: o.name, insurer_id: o.insurer_id, vehicles_total: periods.filter(p => p.fleet_id === o.id).length, vehicles_on_cover: periods.filter(p => p.fleet_id === o.id && !p.cover_end).length, vehicles_scheduled: 0 })));
+    if (path === 'coverage_events') return page(q.get('select') === 'id' ? [{ id: 1 }, { id: 2 }] : [{ id: 'ev1', fleet_id: ids.f1, event_type: 'cover_added', effective_at: '2026-10-22T00:00:00Z', recorded_at: '2026-10-22T10:00:00Z', details: { registration: 'AB10XYZ' } }]);
+    if (path === 'reconciliations') {
+      const id = (q.get('id') || '').replace('eq.', '');
+      const rows = [report].filter(r => sees(r.fleet_id) && (!id || r.id === id));
+      return q.get('select') === 'id' ? page(rows) : page(rows);
+    }
+    if (path === 'reconciliation_lines') return page(lines);
+    return json(404, { message: 'unknown table ' + path });
+  });
+  return new Promise(resolve => server.listen(port, '127.0.0.1', () => resolve({ server, calls })));
+}
