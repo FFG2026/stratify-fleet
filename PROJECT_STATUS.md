@@ -75,11 +75,13 @@ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_ORIGIN, PORT, DEMO_MODE. No service-
 
 Next: create the first verified administrator account, run real browser sign-in and coverage/report flows on a working preview host, then agree final billing rules and implement approvals/finalisation.
 
-## Hosting preparation — 23 October 2026
-- Added api/index.mjs serverless adapter, explicit API rewrites, static dist build, Node 22 configuration and Dublin function region.
-- Shared request handling supports both Vercel's parsed JSON bodies and local raw requests.
-- HTTPS cookies use Secure/HttpOnly; write origins are limited to the canonical URL and Vercel-provided deployment URLs.
-- Local verification in the restored Linux workspace: all 22 tests, syntax checks and npm run build PASS.
-- Intended Vercel workspace discovered from existing projects: Future FG, team_BCmWbr3PwbVdwCuWvVUj9i1k.
-- BLOCKED: Vercel get_team returned 403/not authorised for future-fg. Project creation was rejected by automatic approval review due to unclear destination authorisation and potential source disclosure. No hosting project, environment variables, deployment or DNS changes were made.
-- Next action: confirm the intended workspace and grant the Vercel connection access to it, then deploy the reviewed Git commit and verify its URL before linking Cloudflare DNS.
+
+## Original prototype design restored — 23 October 2026
+
+Recovered the original Stratum Site source at commit 212fa8957375c6117c759787109ff8a73593ed10. Restored its forest-green (#142e28 / #193830), sage and cream palette; 230px desktop sidebar; six main screen labels; three planned-module tabs; compact header; stat cards; portfolio table; and tabbed Add / Remove forms. Retained Stratify branding and the connected portal's authenticated API, pagination, saved reports, CSV export and role checks. Dashboard cards use authorised database records instead of the prototype's illustrative portfolio totals and charts.
+
+All nine navigation entries are visible. Restricted platform/insurer dashboards display a membership explanation rather than exposing their content. Drivers & licences, Claims / FNOL and Fleet CRM have explicit planned-module pages. Policy workspace selection opens the filtered register (or updates the current cover/report screen).
+
+Validation: syntax checks, 23 automated tests, static build passed. Browser visual QA was blocked by the cloud browser URL policy; responsive rules are present but rendered desktop/mobile appearance is unverified.
+
+User manually deployed feat/portal-foundation to Vercel and configured Supabase settings; screenshots show successful sign-in as owen@dcfgroup.co.uk, with no authorised organisations. Administrator membership still needs provisioning. Vercel team API access remains unavailable, so this change is pushed to GitHub; deployment readiness is not verified. Custom domain is not yet linked.

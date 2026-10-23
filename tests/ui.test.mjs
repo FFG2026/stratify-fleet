@@ -32,3 +32,11 @@ test('unprivileged users cannot submit either vehicle change form',()=>{
  const view=ui();view.state.demo=false;view.state.page='changes';view.state.data.memberships=[];
  view.render();assert.match(view.app.innerHTML,/<button class="primary" disabled>Record addition/);assert.match(view.app.innerHTML,/<button disabled>Record removal/);
 });
+test('restored navigation keeps all tabs visible without exposing restricted dashboards',()=>{
+ const view=ui();view.state.demo=false;view.state.data.memberships=[];view.state.page='overview';
+ view.render();
+ for(const label of ['Platform overview','Insurer dashboard','Fleet dashboard','Vehicle register','Manage cover','Reconciliation','Drivers &amp; licences','Claims / FNOL','Fleet CRM'])assert(view.app.innerHTML.includes(label));
+ assert.match(view.app.innerHTML,/requires platform administrator membership/);
+ assert(!view.app.innerHTML.includes('Fleet portfolio'));
+ for(const page of ['drivers','claims','crm']){view.state.page=page;view.render();assert.match(view.app.innerHTML,/not available yet/);}
+});
