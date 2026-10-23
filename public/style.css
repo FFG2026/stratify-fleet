@@ -74,3 +74,5 @@ main{width:100%}
  .sidebar .soon{font-size:9px;padding:2px 4px}
 }
 @media print{.mobile-navigation-header{display:none!important}}
+
+.lookup-row{display:flex;gap:8px;align-items:stretch}.lookup-row input{flex:1}.lookup-row button{white-space:nowrap}

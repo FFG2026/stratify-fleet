@@ -6,6 +6,8 @@ import { normaliseRegistration, parseDate, monthBounds } from './lib/coverage.mj
 import {londonMidnight,londonDate,normaliseWorkspace,normaliseCoverage} from './lib/database.mjs';
 import {fleetQuery,historyQuery,checkedId} from './lib/queries.mjs';
 import {memberRole,memberEmail} from './lib/members.mjs';
+import {lookupVehicle,lookupConfigured,createLimiter} from './lib/vehicle-lookup.mjs';
+const lookupAllowed=createLimiter();
 const root = new URL('./public/', import.meta.url);
 const demoMode = process.env.DEMO_MODE === 'true';
 const base = process.env.SUPABASE_URL;
@@ -59,7 +61,7 @@ export async function handleRequest(req,res) {
   try {
     const url = new URL(req.url,origin);
     if(req.method !== 'GET' && !allowedOrigins.has(req.headers.origin)) throw failure('Request origin rejected.',403);
-    if(url.pathname === '/api/status' && req.method === 'GET') return send(200,{demo:demoMode,configured:!!(base&&key)});
+    if(url.pathname === '/api/status' && req.method === 'GET') return send(200,{demo:demoMode,configured:!!(base&&key),lookup:lookupConfigured()});
     if(url.pathname.startsWith('/api/')) {
       if(demoMode) {
         if(req.method !== 'GET') throw failure('Demo is read-only. Connect the development database to save changes.',403);
@@ -175,6 +177,11 @@ export async function handleRequest(req,res) {
         return send(200,{fleets,counts:{added7,removed7,scheduledAdds,scheduledRemovals,provisionalReports},events});
       }
       // User management. Every rule is enforced again inside the database functions; this layer only validates input.
+      // Registration lookup (DVLA). Needs a signed-in, non-demo user; the key stays on the server.
+      if(url.pathname === '/api/vehicle-lookup' && req.method === 'GET') {
+        if(!lookupAllowed(user.id))throw failure('Too many lookups just now. Try again in a minute.',429);
+        return send(200,await lookupVehicle(url.searchParams.get('reg')||''));
+      }
       if(url.pathname === '/api/members' && req.method === 'GET') {
         const org=checkedId(url.searchParams.get('org'));
         return send(200,{rows:await sb('/rest/v1/rpc/list_members',access,{method:'POST',body:JSON.stringify({p_org:org})})});
