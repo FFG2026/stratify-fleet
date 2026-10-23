@@ -69,7 +69,22 @@ function changeForms(){
 function reportPage(){
  const rows=reports();return '<div class="notice"><strong>Provisional report.</strong> '+(state.savedReport?'Saved database report '+esc(state.savedReport.report.id)+'. Rules snapshot: '+esc(state.savedReport.report.rules_source)+'.':'Select a policy and generate a report, or reopen a saved report below. Reports retain the rules and rates used at generation.')+' Saved reports follow their stored rules snapshot. The date-only preview includes the start date and excludes the removal date. Report finalisation is not available.</div>'+filters(false)+'<div class="panel"><div class="panel-header"><h2>Vehicle-day statement</h2><div class="actions"><button id="generate" class="primary">Generate saved report</button><button id="export">Export CSV ↓</button></div></div><div class="report-summary"><div><strong>'+rows.length.toLocaleString('en-GB')+'</strong><span>VEHICLES IN MONTH</span></div><div><strong>'+rows.reduce((n,r)=>n+r.days,0).toLocaleString('en-GB')+'</strong><span>INSURED VEHICLE-DAYS</span></div><div><strong>'+esc(state.month)+'</strong><span>REPORTING MONTH</span></div></div><div class="table-scroll"><table><thead><tr><th>REGISTRATION</th><th>CUSTOMER</th><th>POLICY</th><th>INSURED DAYS</th><th>REPORT STATUS</th></tr></thead><tbody>'+rows.slice(state.offset,state.offset+25).map(r=>'<tr><td><span class="registration">'+esc(r.registration)+'</span></td><td>'+esc(org(policyFor(r)?.customer_id))+'</td><td>'+esc(policyFor(r)?.reference)+'</td><td><strong>'+r.days+'</strong></td><td>'+badge('Provisional',true)+'</td></tr>').join('')+'</tbody></table></div>'+(!rows.length?'<div class="empty">'+(!state.demo&&!state.savedReport?'Generate or open a saved report to view insured days.':'No insured days in this month.')+'</div>':'')+pagination(rows.length)+'</div>'+historyPanel();
 }
+function setupMobileNavigation(){
+ const sidebar=$('.sidebar');if(!sidebar)return;
+ const nav=sidebar.querySelector('nav');nav.id='workspace-navigation';
+ sidebar.insertAdjacentHTML('afterbegin','<div class="mobile-navigation-header"><a class="mobile-navigation-brand" href="/" aria-label="Stratify home">'+brandLogo+'</a><button type="button" id="menu-toggle" aria-controls="workspace-navigation" aria-expanded="false" aria-label="Open navigation menu"><span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></button></div>');
+ const toggle=$('#menu-toggle');
+ const close=()=>{sidebar.classList.remove('menu-open');toggle.setAttribute('aria-expanded','false');toggle.setAttribute('aria-label','Open navigation menu');};
+ toggle.onclick=()=>{
+  const open=sidebar.classList.toggle('menu-open');
+  toggle.setAttribute('aria-expanded',String(open));
+  toggle.setAttribute('aria-label',open?'Close navigation menu':'Open navigation menu');
+ };
+ sidebar.onkeydown=e=>{if(e.key==='Escape'){close();toggle.focus();}};
+ nav.addEventListener('click',e=>{if(e.target.closest('[data-page]'))close();});
+}
 function bind(){
+ setupMobileNavigation();
  if($('#print-report'))$('#print-report').onclick=()=>window.print();
  document.querySelectorAll('[data-cover-mode]').forEach(button=>button.onclick=()=>{state.coverMode=button.dataset.coverMode;render();$('#'+state.coverMode+'-tab')?.focus();});
  document.querySelectorAll('[data-open-policy]').forEach(button=>button.onclick=()=>{state.policy=button.dataset.openPolicy;state.savedReport=null;state.offset=0;state.page='fleet';refreshPage();});
