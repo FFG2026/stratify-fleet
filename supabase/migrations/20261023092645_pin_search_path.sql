@@ -1,0 +1,10 @@
+alter function private.check_org_insurer() set search_path = '';
+alter function private.check_membership_role() set search_path = '';
+alter function private.forbid_mutation() set search_path = '';
+alter function private.check_policy_links() set search_path = '';
+alter function private.guard_coverage_period() set search_path = '';
+alter function private.require_user() set search_path = '';
+alter function private.forbid_reconciliation_delete() set search_path = '';
+alter function private.missing_rate(uuid, date) set search_path = '';
+alter function private.is_valid_registration(text) set search_path = '';
+alter function private.normalise_registration(text) set search_path = '';
