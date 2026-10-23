@@ -74,3 +74,12 @@ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_ORIGIN, PORT, DEMO_MODE. No service-
 - No schema changes, real-user provisioning, invitation emails, domain DNS edits or public deployment were made in this increment.
 
 Next: create the first verified administrator account, run real browser sign-in and coverage/report flows on a working preview host, then agree final billing rules and implement approvals/finalisation.
+
+## Hosting preparation — 23 October 2026
+- Added api/index.mjs serverless adapter, explicit API rewrites, static dist build, Node 22 configuration and Dublin function region.
+- Shared request handling supports both Vercel's parsed JSON bodies and local raw requests.
+- HTTPS cookies use Secure/HttpOnly; write origins are limited to the canonical URL and Vercel-provided deployment URLs.
+- Local verification in the restored Linux workspace: all 22 tests, syntax checks and npm run build PASS.
+- Intended Vercel workspace discovered from existing projects: Future FG, team_BCmWbr3PwbVdwCuWvVUj9i1k.
+- BLOCKED: Vercel get_team returned 403/not authorised for future-fg. Project creation was rejected by automatic approval review due to unclear destination authorisation and potential source disclosure. No hosting project, environment variables, deployment or DNS changes were made.
+- Next action: confirm the intended workspace and grant the Vercel connection access to it, then deploy the reviewed Git commit and verify its URL before linking Cloudflare DNS.

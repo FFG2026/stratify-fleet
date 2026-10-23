@@ -10,7 +10,8 @@ const demoMode = process.env.DEMO_MODE === 'true';
 const base = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_PUBLISHABLE_KEY;
 const port = Number(process.env.PORT || 3000);
-const origin = process.env.APP_ORIGIN || 'http://localhost:' + port;
+const origin = process.env.APP_ORIGIN || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://'+process.env.VERCEL_PROJECT_PRODUCTION_URL : 'http://localhost:' + port);
+const allowedOrigins=new Set([origin,...['VERCEL_URL','VERCEL_PROJECT_PRODUCTION_URL','VERCEL_BRANCH_URL'].filter(key=>process.env[key]).map(key=>'https://'+process.env[key])]);
 const secure = new URL(origin).protocol === 'https:' ? '; Secure' : '';
 const cookieName = secure ? '__Host-stratify' : 'stratify';
 const routes = new Map([['/', ['index.html','text/html']], ['/app.js',['app.js','text/javascript']], ['/style.css',['style.css','text/css']], ['/coverage.mjs',['../lib/coverage.mjs','text/javascript']]]);
@@ -20,6 +21,11 @@ function token(req) {
   return value ? decodeURIComponent(value.slice(cookieName.length + 1)) : '';
 }
 async function body(req) {
+  if(req.body!==undefined){
+    const text=typeof req.body==='string'?req.body:JSON.stringify(req.body);
+    if(!text||text.length>16384)throw failure('Request too large or empty.',413);
+    try{const data=JSON.parse(text);if(!data||typeof data!=='object'||Array.isArray(data))throw new Error();return data;}catch{throw failure('A JSON object is required.');}
+  }
   let text=''; for await (const chunk of req) { text += chunk; if(text.length > 16384) throw failure('Request too large.',413); }
   try { return JSON.parse(text); } catch { throw failure('Invalid JSON.'); }
 }
@@ -42,7 +48,7 @@ async function allRows(table, access, query = 'order=id.asc') {
     if(offset >= 100000) throw failure('Please narrow the report.',422);
   }
 }
-export function makeServer() { return createServer(async (req,res) => {
+export async function handleRequest(req,res) {
   const send=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data));};
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -50,7 +56,7 @@ export function makeServer() { return createServer(async (req,res) => {
   res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
   try {
     const url = new URL(req.url,origin);
-    if(req.method !== 'GET' && req.headers.origin !== origin) throw failure('Request origin rejected.',403);
+    if(req.method !== 'GET' && !allowedOrigins.has(req.headers.origin)) throw failure('Request origin rejected.',403);
     if(url.pathname === '/api/status' && req.method === 'GET') return send(200,{demo:demoMode,configured:!!(base&&key)});
     if(url.pathname.startsWith('/api/')) {
       if(demoMode) {
@@ -141,5 +147,6 @@ export function makeServer() { return createServer(async (req,res) => {
     const file=routes.get(url.pathname);if(!file) throw failure('Not found.',404);
     res.writeHead(200,{'Content-Type':file[1]+'; charset=utf-8'});res.end(await readFile(new URL(file[0],root)));
   } catch(e) { if(!res.headersSent) send(e.status || 500,{error:e.status ? e.message : 'Unable to complete the request.'});else res.end(); }
-}); }
+}
+export function makeServer() { return createServer(handleRequest); }
 if(process.argv[1] === fileURLToPath(import.meta.url)) makeServer().listen(port,'127.0.0.1',()=>console.log('Stratify development: '+origin+(demoMode?' (read-only demo)':'')));

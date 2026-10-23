@@ -53,3 +53,10 @@ The vehicle register uses database pagination and search; the dashboard loads on
 The domain **stratifyfleet.co.uk** has been purchased. It is not connected to hosting yet; keep APP_ORIGIN on localhost for development. No DNS changes have been made.
 
 GitHub Actions runs syntax and unit/API/render checks on Node 22 and 24. The selected local environment became unavailable during this increment; GitHub CI subsequently passed syntax and automated checks on Node 22 and 24. Browser sign-in and production readiness are still outstanding.
+
+## Vercel hosting
+The repository includes a Vercel Node function adapter in api/index.mjs, static asset build in scripts/build.mjs, and vercel.json routing. npm run build generates dist/; no additional dependencies are needed. Local npm run dev still uses the same shared request handler.
+
+Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in the Vercel project, with DEMO_MODE=false. APP_ORIGIN should be the canonical HTTPS address. Only configured/system-provided Vercel deployment origins are accepted for writes. The access cookie is Secure/HttpOnly on HTTPS. Never add a service-role key.
+
+Hosting preparation passed 22 tests, syntax checks and the static build. Deployment is currently BLOCKED: Vercel denied access to the intended Future FG workspace, and automatic approval review rejected creating the project while that workspace authorisation was unresolved. No project or deployment was created. Do not describe stratifyfleet.co.uk as live.
