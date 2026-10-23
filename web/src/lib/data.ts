@@ -60,6 +60,9 @@ export async function getFleetPage(params: Params): Promise<Page<Period>> {
   return { rows: page.rows.filter(r => !r.voided_at).map(normalisePeriod), total: page.total, offset, limit };
 }
 
+// Plain-language names for the cover changes shown in the activity panel.
+const coverageActionLabels: Record<string, string> = { 'coverage.added': 'Cover added', 'coverage.removed': 'Cover removed', 'coverage.voided': 'Entry voided' };
+
 // ---- customer dashboard figures
 export async function getSummary(ctx: Context) {
   const recent = fleetQuery({ limit: '5' }).query, all = fleetQuery({ limit: '1' }).query, active = fleetQuery({ limit: '1', status: 'active' }).query;
@@ -67,12 +70,12 @@ export async function getSummary(ctx: Context) {
     rest<PeriodRow[]>('/rest/v1/coverage_periods?' + recent),
     countRows('coverage_periods', all.toString()), countRows('coverage_periods', active.toString()),
     rest<{ id: number; occurred_at: string; action: string; entity_type: string; before_state: { registration?: string } | null; after_state: { registration?: string } | null }[]>(
-      '/rest/v1/audit_logs?select=*&order=occurred_at.desc&limit=25')
+      '/rest/v1/audit_logs?select=*&action=in.(coverage.added,coverage.removed,coverage.voided)&order=occurred_at.desc&limit=25')
   ]);
   void ctx;
   return {
     periods: total, covered, recent: recentRows.filter(r => !r.voided_at).map(normalisePeriod),
-    events: audit.map(a => ({ id: a.id, registration: a.after_state?.registration || a.before_state?.registration || a.entity_type, action: a.action, created_at: a.occurred_at }))
+    events: audit.map(a => ({ id: a.id, registration: a.after_state?.registration || a.before_state?.registration || a.entity_type, action: coverageActionLabels[a.action] ?? a.action.replaceAll('_', ' '), created_at: a.occurred_at }))
   };
 }
 

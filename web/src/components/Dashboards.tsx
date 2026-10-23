@@ -101,7 +101,7 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
           <div className="panel-header"><h2>Coverage activity</h2><Link prefetch={false} className="textbtn" href="/changes">Manage cover →</Link></div>
           <div className="panel-body"><div className="timeline">
             {summary.events.slice(0, 5).map(e => (
-              <div className="event" key={e.id}><strong>{e.registration}</strong> · {e.action.replaceAll('_', ' ')}<p>{londonDateTime(e.created_at)}</p></div>
+              <div className="event" key={e.id}><strong>{e.registration}</strong> · {e.action}<p>{londonDateTime(e.created_at)}</p></div>
             ))}
             {!summary.events.length && <div className="event"><strong>Workspace ready</strong><p>Recorded changes will appear here with their effective dates and audit history.</p></div>}
           </div></div>
