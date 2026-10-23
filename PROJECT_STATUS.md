@@ -114,3 +114,14 @@ Added (migration `20261023180000_member_management.sql`, already applied to the 
 Verification: `tests/member_management.sql` (23 database checks, run in a rolled-back transaction on the dev project, all PASS) plus 30 Node tests (members API, claim at sign-in, demo account blocked, Users page per role). Real browser sign-in as each role has NOT been done.
 
 Not built: sending invitation emails (needs a server-side Supabase admin credential, which this app deliberately does not hold) — create the login in Supabase first, then add the person here. No audit view in the UI yet; membership changes and invitations are written to `audit_logs`.
+
+## Live insurer and platform dashboards — 23 October 2026 (branch feat/live-dashboards)
+- New `/api/dashboard`: per-fleet vehicle counts (from the `fleet_overview` view), changes recorded in the last 7 days, cover changes scheduled for the next 7 days, provisional reconciliations from the last 30 days, and the latest 8 changes. Every count runs under the signed-in user's own token, so row-level security limits it to what they may see. Insurer dashboard has an insurer filter for platform administrators.
+- Platform overview and Insurer dashboard now show these live figures instead of reusing fleet pages. No premium estimate is shown: rates are only visible to insurer/platform roles and billing rules are not agreed.
+- Verified: 33 Node tests; database counts run as the insurer login (Northbank 600 vehicles / 573 on cover, Riverside 20 / 20, no scheduled changes yet). Real browser check still outstanding.
+- Limit: with very many fleets the fleet list is capped at 1,000 and passed in the query; move to a database function if a tenant has more.
+
+## Billing assumptions stated by the owner (not yet confirmed with an insurer)
+- A vehicle is charged for the full day it goes on cover, even if added at 23:59, and for the full day it is removed. This matches the current default (start day and end day both charged). Reports stay marked provisional until an insurer confirms.
+- Tax on insurance is Insurance Premium Tax (IPT), not VAT. The rate and whether quoted premiums already include it are NOT confirmed; the `vat_rate` column is a placeholder at 0 and the reports show tax separately.
+- Future-dated additions (add from a chosen date) are supported by the Add vehicle date picker. Backdating stays blocked: a vehicle is on or off cover, with no approval workflow planned for now.

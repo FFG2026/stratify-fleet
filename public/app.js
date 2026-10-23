@@ -1,7 +1,7 @@
 import {insuredDays,csv} from '/coverage.mjs';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={page:'overview',month:new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}).slice(0,7),search:'',policy:'',status:'all',offset:0,data:null,user:null,demo:false,savedReport:null,fleetPage:null,fleetLoading:false,fleetError:'',removalPage:null,removalSearch:'',removalOffset:0,historyPage:null,historyOffset:0,historyLoading:false,pageRequest:0,coverMode:'add',members:null,membersOrg:''};
+const state={page:'overview',month:new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}).slice(0,7),search:'',policy:'',status:'all',offset:0,data:null,user:null,demo:false,savedReport:null,fleetPage:null,fleetLoading:false,fleetError:'',removalPage:null,removalSearch:'',removalOffset:0,historyPage:null,historyOffset:0,historyLoading:false,pageRequest:0,coverMode:'add',members:null,membersOrg:'',dash:null,dashError:'',insurerFilter:''};
 const dateToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const brandLogo='<img class="brand-logo" src="/stratify-logo.png" alt="Stratify" width="2048" height="688">';
 const names={overview:['Platform overview','Your insurers, customers and operations. In one place.'],insurer:['Insurer dashboard','Confidence across every fleet in your book.'],customer:['Fleet dashboard','Your fleet, covered. Every change accounted for.'],fleet:['Vehicle register','A single source of truth for every vehicle.'],changes:['Manage cover','Precise effective dates. A permanent record of every change.'],reconciliation:['Reconciliation','Coverage reconciled down to the vehicle.'],users:['Users','Who can sign in, and what each person can see.']};
@@ -74,7 +74,22 @@ function content(){
  return dashboard();
 }
 function activityPanel(){return '<div class="panel"><div class="panel-header"><h2>Coverage activity</h2><button class="textbtn" data-page="changes">Manage cover →</button></div><div class="panel-body"><div class="timeline">'+(state.data.audit_events.slice(0,5).map(e=>'<div class="event"><strong>'+esc(e.registration)+'</strong> · '+esc(e.action.replaceAll('_',' '))+'<p>'+esc(new Date(e.created_at).toLocaleString('en-GB',{timeZone:'Europe/London'}))+'</p></div>').join('')||'<div class="event"><strong>Workspace ready</strong><p>Recorded changes will appear here with their effective dates and audit history.</p></div>')+'</div></div></div>';}
+function liveDashboard(){
+ if(state.dashError)return '<div class="notice" role="alert">'+esc(state.dashError)+'</div>';
+ const d=state.dash;if(!d)return '<p role="status">Loading live figures...</p>';
+ const fleets=d.fleets,sum=k=>fleets.reduce((a,f)=>a+Number(f[k]||0),0),c=d.counts;
+ const insurers=state.data.organisations.filter(o=>o.kind==='insurer');
+ const pickInsurer=state.page==='insurer'&&insurers.length>1?'<div class="filters"><label>Insurer<select id="insurer-filter"><option value="">All authorised insurers</option>'+insurers.map(o=>'<option value="'+esc(o.id)+'" '+(o.id===state.insurerFilter?'selected':'')+'>'+esc(o.name)+'</option>').join('')+'</select></label></div>':'';
+ const statCards=[['Fleet customers',fleets.length,'In this view'],['Vehicles on cover',sum('vehicles_on_cover'),'Covered right now'],['Added / removed (7 days)',c.added7+' / '+c.removed7,'Recorded changes'],['Scheduled changes',c.scheduledAdds+c.scheduledRemovals,c.scheduledAdds+' additions · '+c.scheduledRemovals+' removals in the next 7 days']];
+ const stat='<div class="stats">'+statCards.map(([l,v,n])=>'<div class="stat"><div class="stat-label">'+esc(l)+'</div><div class="stat-number">'+(typeof v==='number'?v.toLocaleString('en-GB'):esc(v))+'</div><div class="stat-note">'+esc(n)+'</div></div>').join('')+'</div>';
+ const fleetName=id=>fleets.find(f=>f.fleet_id===id)?.fleet_name||org(id);
+ const events='<div class="panel"><div class="panel-header"><h2>Latest changes</h2><button class="textbtn" data-page="changes">Manage cover →</button></div><div class="panel-body"><div class="timeline">'+(d.events.map(e=>'<div class="event"><strong>'+esc(e.details?.registration||'Vehicle')+'</strong> · '+esc(e.event_type==='cover_added'?'added to cover':e.event_type==='cover_removed'?'removed from cover':'cover record corrected')+' · '+esc(fleetName(e.fleet_id))+'<p>Effective '+esc(new Date(e.effective_at).toLocaleDateString('en-GB',{timeZone:'Europe/London'}))+' · recorded '+esc(new Date(e.recorded_at).toLocaleString('en-GB',{timeZone:'Europe/London'}))+'</p></div>').join('')||'<div class="event"><strong>No changes recorded yet</strong><p>Vehicles added or removed will appear here.</p></div>')+'</div></div></div>';
+ const attention='<section class="panel sage"><div class="panel-body"><div class="cardhead"><h2>Needs your attention</h2>'+badge('Live')+'</div><div class="attention"><span class="attention-icon">'+esc(String(c.scheduledAdds+c.scheduledRemovals))+'</span><div><h3>Scheduled cover changes</h3><p>Taking effect in the next 7 days.</p></div></div><div class="attention"><span class="attention-icon">'+esc(String(c.provisionalReports))+'</span><div><h3>Provisional reconciliations</h3><p>Generated in the last 30 days. None can be finalised yet.</p></div><button class="textbtn" data-page="reconciliation" aria-label="Open reconciliation">↗</button></div><div class="attention"><span class="attention-icon">⇄</span><div><h3>MIB / MID integration</h3><p>Not connected. No external submissions are sent.</p></div></div></div></section>';
+ const table='<section class="panel"><div class="panel-header"><div><h2>Fleet portfolio</h2><p class="subtext">Vehicles per customer, from live records</p></div><span class="muted">'+fleets.length+' fleets</span></div><div class="table-scroll"><table><thead><tr><th>Customer</th><th>Insurer</th><th>Vehicles</th><th>On cover</th><th>Scheduled</th><th>Workspace</th></tr></thead><tbody>'+fleets.map(f=>{const pol=state.data.policies.find(p=>p.customer_id===f.fleet_id);return '<tr><td><div class="company"><span class="company-logo">'+esc(f.fleet_name.slice(0,1))+'</span><strong>'+esc(f.fleet_name)+'</strong></div></td><td>'+esc(org(f.insurer_id))+'</td><td>'+Number(f.vehicles_total).toLocaleString('en-GB')+'</td><td>'+Number(f.vehicles_on_cover).toLocaleString('en-GB')+'</td><td>'+Number(f.vehicles_scheduled).toLocaleString('en-GB')+'</td><td>'+(pol?'<button class="textbtn" data-open-policy="'+esc(pol.id)+'">Open fleet ↗</button>':'—')+'</td></tr>';}).join('')+'</tbody></table></div>'+(!fleets.length?'<div class="empty">No fleet customers in this view.</div>':'')+'</section>';
+ return pickInsurer+stat+'<div class="grid-two">'+events+attention+'</div>'+table;
+}
 function dashboard(){
+ if(!state.demo&&(state.page==='overview'||state.page==='insurer'))return liveDashboard();
  const customers=state.data.organisations.filter(o=>o.kind==='customer');
  const insurers=state.data.organisations.filter(o=>o.kind==='insurer');
  const membership=roles().length;
@@ -110,6 +125,7 @@ function setupMobileNavigation(){
 }
 function bind(){
  setupMobileNavigation();
+ if($('#insurer-filter'))$('#insurer-filter').onchange=e=>{state.insurerFilter=e.target.value;state.dash=null;refreshPage();};
  if($('#members-org'))$('#members-org').onchange=e=>{state.membersOrg=e.target.value;state.members=null;refreshPage();};
  if($('#member-form'))$('#member-form').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));e.target.querySelector('button').disabled=true;memberAction('members',{org:state.membersOrg,email:d.email,role:d.role},r=>r.result==='added'?'Added. They have access now.':'Invitation saved. It applies when they first sign in.');};
  document.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=()=>memberAction('members/role',{membership:el.dataset.memberRole,role:el.value},()=>'Role updated and recorded in the audit trail.'));
@@ -130,7 +146,7 @@ function bind(){
   try{const report=await api('reconciliations/'+button.dataset.report);if(request!==state.pageRequest||state.page!=='reconciliation')return;state.savedReport=report;state.offset=0;render();notify('Opened the saved report snapshot.');}catch(e){notify(e.message);button.disabled=false;}
  });
 
- document.querySelectorAll('[data-page]').forEach(el=>el.onclick=()=>{state.page=el.dataset.page;state.offset=0;state.fleetPage=null;state.fleetError='';refreshPage();});
+ document.querySelectorAll('[data-page]').forEach(el=>el.onclick=()=>{state.page=el.dataset.page;state.offset=0;state.fleetPage=null;state.dash=null;state.dashError='';state.fleetError='';refreshPage();});
  if($('#policy'))$('#policy').onchange=e=>{state.policy=e.target.value;state.savedReport=null;state.offset=0;state.removalOffset=0;state.historyOffset=0;refreshPage();};
  if($('#status'))$('#status').onchange=e=>{state.status=e.target.value;state.offset=0;refreshPage();};
  if($('#month'))$('#month').onchange=e=>{if(!e.target.value)return;state.month=e.target.value;state.savedReport=null;state.offset=0;state.historyOffset=0;refreshPage();};
@@ -205,6 +221,10 @@ async function refreshPage(focusId){
    const result=await api('reconciliations?'+params);if(request!==state.pageRequest)return;state.historyPage=result;
   }
   if(page==='users'&&canManageUsers()){await loadMembers(request);}
+  if((page==='overview'||page==='insurer')&&visiblePage(page)){
+   const params=new URLSearchParams();if(page==='insurer'&&state.insurerFilter)params.set('insurer',state.insurerFilter);
+   try{const result=await api('dashboard'+(params.size?'?'+params:''));if(request!==state.pageRequest)return;state.dash=result;state.dashError='';}catch(e){if(request!==state.pageRequest)return;state.dashError=e.message;}
+  }
  }catch(e){if(request!==state.pageRequest)return;state.fleetError=e.message;notify(e.message);}
  if(request!==state.pageRequest)return;
  state.fleetLoading=false;state.historyLoading=false;render();
