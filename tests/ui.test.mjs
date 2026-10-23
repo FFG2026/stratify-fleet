@@ -40,3 +40,22 @@ test('restored navigation keeps all tabs visible without exposing restricted das
  assert(!view.app.innerHTML.includes('Fleet portfolio'));
  for(const page of ['drivers','claims','crm']){view.state.page=page;view.render();assert.match(view.app.innerHTML,/not available yet/);}
 });
+test('Users page: only administrators see it, each sees only the organisations they may manage',()=>{
+ const orgs=[{id:'plat',kind:'platform',name:'Platform'},{id:'ins1',kind:'insurer',name:'Insurer One'},{id:'ins2',kind:'insurer',name:'Insurer Two'},{id:'f1',kind:'customer',name:'Fleet One',insurer_id:'ins1'},{id:'f2',kind:'customer',name:'Fleet Two',insurer_id:'ins2'}];
+ const as=(role,organisation_id)=>{
+  const view=ui();view.state.demo=false;view.state.user={id:'u1',email:'me@example.invalid'};
+  view.state.data={...structuredClone(demo),organisations:orgs,memberships:[{role,organisation_id,active:true}]};
+  view.state.page='users';view.state.members={rows:[{id:'m1',user_id:'u2',email:'other@example.invalid',role:'fleet_manager',active:true,pending:false},{id:'m2',user_id:'u1',email:'me@example.invalid',role:'fleet_admin',active:true,pending:false},{id:'i1',email:'new@example.invalid',role:'fleet_manager',active:true,pending:true}]};
+  view.render();return view.app.innerHTML;
+ };
+ const platform=as('platform_super_admin','plat'),insurer=as('insurer_admin','ins1'),fleet=as('fleet_admin','f1'),claims=as('insurer_claims','ins1');
+ assert(!platform.includes('undefined')&&!insurer.includes('undefined')&&!fleet.includes('undefined'));
+ assert.match(platform,/Insurer Two/);assert.match(platform,/Fleet Two/);
+ assert.match(insurer,/Fleet One/);assert.doesNotMatch(insurer,/Insurer Two|Fleet Two/);
+ assert.doesNotMatch(fleet,/Insurer One|Fleet Two|Insurer Two/);
+ assert.doesNotMatch(claims,/members-org/);assert.doesNotMatch(claims,/data-page="users"/);
+ assert.match(platform,/data-page="users"/);
+ // you cannot edit your own row; invitations can be cancelled; others can be switched off
+ assert.doesNotMatch(fleet,/Role for me@example/);assert.match(fleet,/Role for other@example/);assert.match(fleet,/Cancel invitation/);assert.match(fleet,/Switch off access/);
+ const demoView=ui();demoView.state.page='users';demoView.render();assert.doesNotMatch(demoView.app.innerHTML,/data-page="users"/);
+});

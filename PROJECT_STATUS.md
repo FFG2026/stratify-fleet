@@ -98,3 +98,19 @@ User provisioning remains pending: existing Supabase lookup found only owen@dcfg
 Dataset: Alder Mutual, Northstar Assurance, Haven Commercial; Atlas Logistics (600), Swiftline Couriers (180), Meridian Transport (420), Oak & Co Services (85); 1,285 vehicles, four policies, September additions/removals and audit examples. Demo is read-only; no database REST queries or writes are issued for demo users. Existing preview CSV and pagination supported.
 
 Validation: syntax checks, 24 tests, static build. Browser visual QA remains blocked by browser URL policy. Vercel deployment remains a manual user step due unavailable team access.
+
+## User management — 23 October 2026 (branch feat/user-management)
+Three access levels, all enforced by the database (RLS + permission checks inside every function):
+- Platform administrator: every insurer, customer, vehicle and rate.
+- Insurer administrator: their own organisation and its fleet customers.
+- Fleet administrator: their own fleet only.
+
+Added (migration `20261023180000_member_management.sql`, already applied to the dev project):
+- `membership.manage` granted to insurer_admin and fleet_admin (development assumption — review).
+- `invitations` table; `list_members`, `add_member`, `change_member_role`, `set_member_active`, `revoke_invitation`, `claim_invitations` functions.
+- Safeguards: nobody can change or switch off their own access; an organisation always keeps one active administrator; roles must suit the organisation kind (an insurer can never create a platform administrator); invitations are claimed only by a CONFIRMED email at sign-in.
+- Server routes `/api/members*` (input validation only; the database decides) and a Users screen visible to administrators.
+
+Verification: `tests/member_management.sql` (23 database checks, run in a rolled-back transaction on the dev project, all PASS) plus 30 Node tests (members API, claim at sign-in, demo account blocked, Users page per role). Real browser sign-in as each role has NOT been done.
+
+Not built: sending invitation emails (needs a server-side Supabase admin credential, which this app deliberately does not hold) — create the login in Supabase first, then add the person here. No audit view in the UI yet; membership changes and invitations are written to `audit_logs`.

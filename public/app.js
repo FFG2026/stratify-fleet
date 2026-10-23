@@ -1,10 +1,10 @@
 import {insuredDays,csv} from '/coverage.mjs';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const state={page:'overview',month:new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}).slice(0,7),search:'',policy:'',status:'all',offset:0,data:null,user:null,demo:false,savedReport:null,fleetPage:null,fleetLoading:false,fleetError:'',removalPage:null,removalSearch:'',removalOffset:0,historyPage:null,historyOffset:0,historyLoading:false,pageRequest:0,coverMode:'add'};
+const state={page:'overview',month:new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}).slice(0,7),search:'',policy:'',status:'all',offset:0,data:null,user:null,demo:false,savedReport:null,fleetPage:null,fleetLoading:false,fleetError:'',removalPage:null,removalSearch:'',removalOffset:0,historyPage:null,historyOffset:0,historyLoading:false,pageRequest:0,coverMode:'add',members:null,membersOrg:''};
 const dateToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const brandLogo='<img class="brand-logo" src="/stratify-logo.png" alt="Stratify" width="2048" height="688">';
-const names={overview:['Platform overview','Your insurers, customers and operations. In one place.'],insurer:['Insurer dashboard','Confidence across every fleet in your book.'],customer:['Fleet dashboard','Your fleet, covered. Every change accounted for.'],fleet:['Vehicle register','A single source of truth for every vehicle.'],changes:['Manage cover','Precise effective dates. A permanent record of every change.'],reconciliation:['Reconciliation','Coverage reconciled down to the vehicle.']};
+const names={overview:['Platform overview','Your insurers, customers and operations. In one place.'],insurer:['Insurer dashboard','Confidence across every fleet in your book.'],customer:['Fleet dashboard','Your fleet, covered. Every change accounted for.'],fleet:['Vehicle register','A single source of truth for every vehicle.'],changes:['Manage cover','Precise effective dates. A permanent record of every change.'],reconciliation:['Reconciliation','Coverage reconciled down to the vehicle.'],users:['Users','Who can sign in, and what each person can see.']};
 const planned={drivers:['Drivers & licences','Driver records, documents and licence-check permissions.'],claims:['Claims / FNOL','Incident reporting, photos, third-party details and shared claim progress.'],crm:['Fleet CRM','Fleet contacts, activity history and driver communications.']};
 const api=async(path,options={})=>{const res=await fetch('/api/'+path,{...options,headers:{'Content-Type':'application/json'}});const data=await res.json();if(!res.ok){if(res.status===401&&state.user){state.user=null;login();}throw new Error(data.error||'Request failed.');}return data;};
 function notify(message){$('#message').textContent=message;clearTimeout(state.timer);state.timer=setTimeout(()=>$('#message').textContent='',6500);}
@@ -18,13 +18,37 @@ function reports(){if(state.savedReport){const map=new Map();for(const line of s
 const badge=(text,warn=false)=>'<span class="badge'+(warn?' warning':'')+'">'+esc(text)+'</span>';
 function roles(){return (state.data?.memberships||[]).filter(m=>m.active).map(m=>m.role);}
 function canChange(){return !state.demo&&roles().some(r=>['platform_super_admin','insurer_admin','fleet_admin','fleet_manager'].includes(r));}
+function canManageUsers(){return !state.demo&&roles().some(r=>['platform_super_admin','insurer_admin','fleet_admin'].includes(r));}
+function manageableOrgs(){
+ const m=(state.data?.memberships||[]).filter(x=>x.active);
+ if(m.some(x=>x.role==='platform_super_admin'))return state.data.organisations;
+ const own=new Set(m.filter(x=>['insurer_admin','fleet_admin'].includes(x.role)).map(x=>x.organisation_id));
+ return state.data.organisations.filter(o=>own.has(o.id)||(o.kind==='customer'&&own.has(o.insurer_id)));
+}
+const roleLabels={platform_super_admin:'Platform administrator',insurer_admin:'Insurer administrator',insurer_claims:'Insurer claims',insurer_accounts:'Insurer accounts',fleet_admin:'Fleet administrator',fleet_manager:'Fleet manager',fleet_accounts:'Fleet accounts',driver:'Driver'};
+const rolesForKind=kind=>kind==='platform'?['platform_super_admin']:kind==='insurer'?['insurer_admin','insurer_claims','insurer_accounts']:['fleet_admin','fleet_manager','fleet_accounts','driver'];
+function usersPage(){
+ if(!canManageUsers())return '<section class="panel"><div class="panel-body"><h2>User management</h2><p>This page is available to platform, insurer and fleet administrators.</p></div></section>';
+ const orgs=manageableOrgs(),current=orgs.find(o=>o.id===state.membersOrg)||orgs[0];
+ if(!current)return '<section class="panel"><div class="panel-body"><p>No organisations are available to manage.</p></div></section>';
+ const page=state.members;
+ const roleOptions=selected=>rolesForKind(current.kind).map(r=>'<option value="'+r+'" '+(r===selected?'selected':'')+'>'+esc(roleLabels[r])+'</option>').join('');
+ const rows=(page?.rows||[]).map(r=>{
+  const self=!r.pending&&r.user_id===state.user.id;
+  return '<tr><td><strong>'+esc(r.email)+'</strong>'+(self?'<div class="subtext">This is you</div>':'')+'</td><td>'+(r.pending||self?esc(roleLabels[r.role]):'<select data-member-role="'+esc(r.id)+'" aria-label="Role for '+esc(r.email)+'">'+roleOptions(r.role)+'</select>')+'</td><td>'+(r.pending?badge('Invitation pending',true):r.active?badge('Active'):badge('Switched off',true))+'</td><td>'+(r.pending?'<button data-revoke="'+esc(r.id)+'">Cancel invitation</button>':self?'—':'<button data-member-active="'+esc(r.id)+'" data-next="'+(!r.active)+'">'+(r.active?'Switch off access':'Restore access')+'</button>')+'</td></tr>';
+ }).join('');
+ return '<div class="notice"><strong>Who can see what.</strong> Platform administrators see everything. Insurer users see their own customers and those customers\' vehicles. Fleet users see only their own fleet. These limits are enforced by the database. You cannot change your own access, and an organisation always keeps one active administrator.</div>'
+  +'<div class="filters"><label>Organisation<select id="members-org">'+orgs.map(o=>'<option value="'+esc(o.id)+'" '+(o.id===current.id?'selected':'')+'>'+esc(o.name)+' ('+esc(o.kind==='customer'?'fleet customer':o.kind)+')</option>').join('')+'</select></label></div>'
+  +'<div class="panel"><div class="panel-header"><h2>People in '+esc(current.name)+'</h2></div>'+(state.membersLoading?'<p class="panel-body" role="status">Loading people...</p>':'')+(state.membersError?'<div class="notice" role="alert">'+esc(state.membersError)+'</div>':'')+'<div class="table-scroll"><table><thead><tr><th>EMAIL</th><th>ROLE</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+(page&&!page.rows.length&&!state.membersLoading?'<div class="empty">No one has been added yet.</div>':'')+'</div>'
+  +'<div class="panel"><div class="panel-header"><h2>Add a person</h2></div><div class="panel-body"><form id="member-form" class="filters"><label>Email<input name="email" type="email" required maxlength="254" autocomplete="off"></label><label>Role<select name="role">'+roleOptions('')+'</select></label><button class="primary" type="submit">Add person</button></form><p class="subtext">If the person already has a Stratify login they get access immediately. Otherwise the invitation is held and applies the first time they sign in with that email address. No email is sent from here yet, so create their login first and tell them it is ready.</p></div></div>';
+}
 function canGenerate(){return !state.demo&&roles().some(r=>['platform_super_admin','insurer_admin','insurer_accounts','fleet_admin','fleet_accounts'].includes(r));}
 function visiblePage(key){if(state.demo)return true;const r=roles();return key==='overview'?r.includes('platform_super_admin'):key==='insurer'?r.some(role=>role==='platform_super_admin'||role.startsWith('insurer_')):true;}
 function render(){
  const [title,subtitle]=names[state.page]||planned[state.page]||names.overview;
- const icons=['◈','▦','⌂','▤','⇄','▥'];
+ const icons=['◈','▦','⌂','▤','⇄','▥','◎'];
  const initials=(state.user.email||'S').slice(0,2).toUpperCase();
- $('#app').innerHTML='<div class="shell"><aside class="sidebar"><div class="brand">'+brandLogo+'</div><nav aria-label="Main navigation"><div class="nav-label">Workspace</div>'+Object.entries(names).map(([key,[label]],i)=>'<button data-page="'+key+'" class="'+(state.page===key?'active':'')+'" '+(state.page===key?'aria-current="page"':'')+'><span class="nav-icon">'+icons[i]+'</span>'+esc(label)+'</button>').join('')+'<div class="nav-label expand-label">Expand your workspace</div>'+Object.entries(planned).map(([key,[label]])=>'<button data-page="'+key+'" class="future '+(state.page===key?'active':'')+'" '+(state.page===key?'aria-current="page"':'')+'>'+esc(label)+'<span class="soon">SOON</span></button>').join('')+'</nav><div class="sidebar-footer"><strong>Designed for the road ahead.</strong><br>Fleet insurance, connected.<br><span>STRATIFY PLATFORM · DEVELOPMENT</span></div></aside><div class="main"><header class="topbar"><label class="workspace-picker"><span class="sr-only">Policy workspace</span><select id="workspace-policy"><option value="">All authorised workspaces</option>'+state.data.policies.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.policy?'selected':'')+'>'+esc(org(p.customer_id))+' · '+esc(p.reference)+'</option>').join('')+'</select></label><div class="account">'+badge(state.demo?'DEMO · READ-ONLY':'DEVELOPMENT',true)+'<span class="avatar">'+esc(initials)+'</span><span class="email">'+esc(state.user.email)+'</span>'+'<button id="logout">'+(state.demo?'Exit demo':'Sign out')+'</button>'+'</div></header><main><div class="breadcrumb">STRATIFY &nbsp; / &nbsp; '+(state.page==='overview'?'PLATFORM CONTROL':state.page==='reconciliation'?'FINANCE':'WORKSPACE')+'</div><div class="heading"><div><h1>'+esc(state.page==='overview'?'A clear view of your entire portfolio.':title)+'</h1><p>'+esc(subtitle)+'</p></div><div class="actions">'+pageActions()+'</div></div>'+(state.demo?'<div class="notice">Demonstration workspace · Fictional records · Saving is disabled. Selected month: '+esc(state.month)+'.</div>':'')+content()+'<p class="workspace-note">◇ '+(state.demo?'Demo workspace · Synthetic data':'Development workspace · Authorised records only')+' · No live MIB / MID connection</p></main></div></div>';
+ $('#app').innerHTML='<div class="shell"><aside class="sidebar"><div class="brand">'+brandLogo+'</div><nav aria-label="Main navigation"><div class="nav-label">Workspace</div>'+Object.entries(names).filter(([key])=>key!=='users'||canManageUsers()).map(([key,[label]],i)=>'<button data-page="'+key+'" class="'+(state.page===key?'active':'')+'" '+(state.page===key?'aria-current="page"':'')+'><span class="nav-icon">'+icons[i]+'</span>'+esc(label)+'</button>').join('')+'<div class="nav-label expand-label">Expand your workspace</div>'+Object.entries(planned).map(([key,[label]])=>'<button data-page="'+key+'" class="future '+(state.page===key?'active':'')+'" '+(state.page===key?'aria-current="page"':'')+'>'+esc(label)+'<span class="soon">SOON</span></button>').join('')+'</nav><div class="sidebar-footer"><strong>Designed for the road ahead.</strong><br>Fleet insurance, connected.<br><span>STRATIFY PLATFORM · DEVELOPMENT</span></div></aside><div class="main"><header class="topbar"><label class="workspace-picker"><span class="sr-only">Policy workspace</span><select id="workspace-policy"><option value="">All authorised workspaces</option>'+state.data.policies.map(p=>'<option value="'+esc(p.id)+'" '+(p.id===state.policy?'selected':'')+'>'+esc(org(p.customer_id))+' · '+esc(p.reference)+'</option>').join('')+'</select></label><div class="account">'+badge(state.demo?'DEMO · READ-ONLY':'DEVELOPMENT',true)+'<span class="avatar">'+esc(initials)+'</span><span class="email">'+esc(state.user.email)+'</span>'+'<button id="logout">'+(state.demo?'Exit demo':'Sign out')+'</button>'+'</div></header><main><div class="breadcrumb">STRATIFY &nbsp; / &nbsp; '+(state.page==='overview'?'PLATFORM CONTROL':state.page==='reconciliation'?'FINANCE':'WORKSPACE')+'</div><div class="heading"><div><h1>'+esc(state.page==='overview'?'A clear view of your entire portfolio.':title)+'</h1><p>'+esc(subtitle)+'</p></div><div class="actions">'+pageActions()+'</div></div>'+(state.demo?'<div class="notice">Demonstration workspace · Fictional records · Saving is disabled. Selected month: '+esc(state.month)+'.</div>':'')+content()+'<p class="workspace-note">◇ '+(state.demo?'Demo workspace · Synthetic data':'Development workspace · Authorised records only')+' · No live MIB / MID connection</p></main></div></div>';
  bind();
 }
 function pageActions(){
@@ -44,6 +68,7 @@ function content(){
  if(planned[state.page])return '<section class="panel planned-panel"><div class="panel-body"><span class="badge warning">PLANNED MODULE</span><h2>'+esc(planned[state.page][0])+'</h2><p>'+esc(planned[state.page][1])+'</p><p>This module is on the roadmap. It is not available yet.</p><button data-page="customer">Return to fleet dashboard →</button></div></section>';
  if(!visiblePage(state.page))return '<section class="panel"><div class="panel-body"><h2>'+esc(names[state.page][0])+' access</h2><p>This dashboard requires '+(state.page==='overview'?'platform administrator':'insurer or platform administrator')+' membership. Your current account has not been assigned this access.</p><button data-page="customer">Open your fleet dashboard →</button></div></section>';
  if(state.page==='fleet')return stats()+filters()+(state.fleetLoading?'<p role="status">Loading vehicles...</p>':'')+(state.fleetError?'<div class="notice" role="alert">'+esc(state.fleetError)+'</div>':'')+'<div class="panel"><div class="panel-header"><h2>Coverage register</h2><label>Show<select id="status"><option value="all">All periods</option><option value="active" '+(state.status==='active'?'selected':'')+'>Currently covered</option><option value="closed" '+(state.status==='closed'?'selected':'')+'>Closed periods</option><option value="scheduled" '+(state.status==='scheduled'?'selected':'')+'>Scheduled additions</option></select></label></div>'+fleetTable(periods(),true)+'</div>';
+ if(state.page==='users')return usersPage();
  if(state.page==='changes')return changeForms();
  if(state.page==='reconciliation')return reportPage();
  return dashboard();
@@ -85,6 +110,11 @@ function setupMobileNavigation(){
 }
 function bind(){
  setupMobileNavigation();
+ if($('#members-org'))$('#members-org').onchange=e=>{state.membersOrg=e.target.value;state.members=null;refreshPage();};
+ if($('#member-form'))$('#member-form').onsubmit=e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));e.target.querySelector('button').disabled=true;memberAction('members',{org:state.membersOrg,email:d.email,role:d.role},r=>r.result==='added'?'Added. They have access now.':'Invitation saved. It applies when they first sign in.');};
+ document.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=()=>memberAction('members/role',{membership:el.dataset.memberRole,role:el.value},()=>'Role updated and recorded in the audit trail.'));
+ document.querySelectorAll('[data-member-active]').forEach(el=>el.onclick=()=>{el.disabled=true;memberAction('members/active',{membership:el.dataset.memberActive,active:el.dataset.next==='true'},()=>el.dataset.next==='true'?'Access restored.':'Access switched off.');});
+ document.querySelectorAll('[data-revoke]').forEach(el=>el.onclick=()=>{el.disabled=true;memberAction('members/revoke',{invitation:el.dataset.revoke},()=>'Invitation cancelled.');});
  if($('#print-report'))$('#print-report').onclick=()=>window.print();
  document.querySelectorAll('[data-cover-mode]').forEach(button=>button.onclick=()=>{state.coverMode=button.dataset.coverMode;render();$('#'+state.coverMode+'-tab')?.focus();});
  document.querySelectorAll('[data-open-policy]').forEach(button=>button.onclick=()=>{state.policy=button.dataset.openPolicy;state.savedReport=null;state.offset=0;state.page='fleet';refreshPage();});
@@ -135,6 +165,18 @@ function historyPanel(){
  const page=state.historyPage||{rows:[],total:0};
  return '<div class="panel"><div class="panel-header"><h2>Saved reports for '+esc(state.month)+'</h2>'+badge('Stored snapshots')+'</div>'+(state.historyLoading?'<p class="panel-body" role="status">Loading report history...</p>':'')+'<div class="table-scroll"><table><thead><tr><th>GENERATED</th><th>POLICY</th><th>VEHICLE-DAYS</th><th>STATUS</th><th>OPEN</th></tr></thead><tbody>'+page.rows.map(r=>'<tr><td>'+esc(new Date(r.generated_at).toLocaleString('en-GB',{timeZone:'Europe/London'}))+'</td><td>'+esc(policyFor({policy_id:r.policy_id})?.reference||'Fleet-wide report')+'</td><td>'+esc(r.total_vehicle_days)+'</td><td>'+badge(r.status,true)+'</td><td><button data-report="'+esc(r.id)+'">Open report</button></td></tr>').join('')+'</tbody></table></div>'+(!page.total?'<div class="empty">No saved reports for these filters.</div>':'')+'<div class="pagination"><span>'+page.total+' saved reports</span><div class="actions"><button id="history-prev" '+(!state.historyOffset?'disabled':'')+'>Previous</button><button id="history-next" '+(state.historyOffset+25>=page.total?'disabled':'')+'>Next</button></div></div></div>';
 }
+async function loadMembers(request){
+ const orgs=manageableOrgs();if(!orgs.length)return;
+ if(!orgs.some(o=>o.id===state.membersOrg))state.membersOrg=orgs[0].id;
+ state.membersLoading=true;state.membersError='';
+ try{const result=await api('members?org='+encodeURIComponent(state.membersOrg));if(request===undefined||request===state.pageRequest)state.members=result;}
+ catch(e){state.membersError=e.message;state.members={rows:[]};}
+ state.membersLoading=false;
+}
+async function memberAction(path,payload,message){
+ try{const result=await api(path,{method:'POST',body:JSON.stringify(payload)});await loadMembers();render();notify(message(result));}
+ catch(e){notify(e.message);await loadMembers();render();}
+}
 async function loadHistory(){
  const params=new URLSearchParams({month:state.month,offset:String(state.historyOffset),limit:'25'});
  if(state.policy)params.set('policy',state.policy);
@@ -162,6 +204,7 @@ async function refreshPage(focusId){
    const params=new URLSearchParams({month:state.month,offset:String(state.historyOffset),limit:'25'});if(state.policy)params.set('policy',state.policy);
    const result=await api('reconciliations?'+params);if(request!==state.pageRequest)return;state.historyPage=result;
   }
+  if(page==='users'&&canManageUsers()){await loadMembers(request);}
  }catch(e){if(request!==state.pageRequest)return;state.fleetError=e.message;notify(e.message);}
  if(request!==state.pageRequest)return;
  state.fleetLoading=false;state.historyLoading=false;render();
