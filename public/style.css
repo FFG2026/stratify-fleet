@@ -56,3 +56,21 @@ main{width:100%}
  .login{width:calc(100% - 32px)}
 }
 @media print{.main{width:100%}.table-scroll{contain:none}}
+
+/* Mobile navigation is a disclosure menu; the desktop sidebar stays expanded. */
+.mobile-navigation-header{display:none}
+@media(max-width:700px){
+ .sidebar{padding:12px 14px}
+ .mobile-navigation-header{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0}
+ .mobile-navigation-brand{display:block;width:145px;max-width:55%;padding:6px 9px;border-radius:6px;background:var(--bg);flex-shrink:0}
+ #menu-toggle{display:flex;align-items:center;gap:9px;min-height:44px;padding:10px 12px;background:transparent;color:#e3f3b6;border-color:#52665a}
+ .hamburger{display:grid;gap:4px;width:20px}
+ .hamburger span{display:block;height:2px;width:20px;background:currentColor;border-radius:2px}
+ .sidebar nav{display:none;overflow:visible}
+ .sidebar.menu-open nav{display:grid;gap:4px;margin-top:14px;padding-top:12px;border-top:1px solid #365044}
+ .sidebar nav button{width:100%;min-height:44px;white-space:normal;text-align:left;padding:12px 13px;font-size:14px}
+ .sidebar.menu-open .nav-label{display:block;margin:12px 13px 8px}
+ .sidebar.menu-open .nav-icon{display:inline-block}
+ .sidebar .soon{font-size:9px;padding:2px 4px}
+}
+@media print{.mobile-navigation-header{display:none!important}}
