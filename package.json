@@ -1,0 +1,16 @@
+{
+  "name": "stratify-fleet",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env server.mjs",
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "test": "node --test",
+    "check": "node --check server.mjs && node --check public/app.js && node --check lib/queries.mjs && node --check api/index.mjs && node --check scripts/build.mjs",
+    "build": "node scripts/build.mjs"
+  }
+}
