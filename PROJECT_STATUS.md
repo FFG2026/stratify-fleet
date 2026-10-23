@@ -60,3 +60,17 @@ SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, APP_ORIGIN, PORT, DEMO_MODE. No service-
 3. Compare all six screens against the original prototype and read the master brief in full.
 4. Agree billing rules and add report finalisation, approvals and scoped server-side pagination.
 5. Configure deployment only when instructed; do not treat this branch as production ready.
+
+## Second development increment — 23 October 2026
+- Purchased domain confirmed by user: stratifyfleet.co.uk, registered with Cloudflare. DNS/hosting have not been changed.
+- Vehicle register now requests one database page at a time, with policy, registration/vehicle-name search and active/closed/scheduled filters. Dashboard totals use database counts and only five recent periods are loaded.
+- Removal selector searches and pages open periods instead of building a 600-option dropdown.
+- Added paginated saved report history by month and policy; users can reopen and export the original saved lines and rules snapshot.
+- Connected reconciliation no longer pretends five recently loaded periods form a full month preview. It requires a generated/reopened report; fictional demo mode retains its illustrative preview.
+- Changed API queries remain protected by the existing user-token RLS; hidden report IDs return 404 before reading lines.
+- Both vehicle change forms disable submission for read-only roles.
+- Added tests for query injection/range validation, the last page of a 600-vehicle fleet, stored report reopening, cross-tenant hidden reports, bounded dashboard loading and six-screen rendering.
+- Added GitHub Actions Node 22/24 checks. Validation status at this commit: JavaScript syntax and in-process six-screen rendering checks passed; full Node and live browser tests are pending because the selected execution environment became unavailable mid-turn.
+- No schema changes, real-user provisioning, invitation emails, domain DNS edits or public deployment were made in this increment.
+
+Next: confirm GitHub CI, create the first verified administrator account, run real browser sign-in and coverage/report flows on a working preview host, then agree final billing rules and implement approvals/finalisation.

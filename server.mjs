@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { demo } from './lib/demo.mjs';
 import { normaliseRegistration, parseDate, monthBounds } from './lib/coverage.mjs';
-import {londonMidnight,londonDate,normaliseWorkspace} from './lib/database.mjs';
+import {londonMidnight,londonDate,normaliseWorkspace,normaliseCoverage} from './lib/database.mjs';
+import {fleetQuery,historyQuery,checkedId} from './lib/queries.mjs';
 const root = new URL('./public/', import.meta.url);
 const demoMode = process.env.DEMO_MODE === 'true';
 const base = process.env.SUPABASE_URL;
@@ -23,9 +24,14 @@ async function body(req) {
   try { return JSON.parse(text); } catch { throw failure('Invalid JSON.'); }
 }
 async function sb(path, access, options = {}) {
-  const response = await fetch(base+path, { ...options, signal:AbortSignal.timeout(15000), headers:{apikey:key, Authorization:'Bearer '+(access || key), 'Content-Type':'application/json', ...options.headers} });
+  const {withCount,...fetchOptions}=options;
+  const response = await fetch(base+path, { ...fetchOptions, signal:AbortSignal.timeout(15000), headers:{apikey:key, Authorization:'Bearer '+(access || key), 'Content-Type':'application/json', ...options.headers} });
   const text = await response.text(); let data; try { data=JSON.parse(text); } catch { data=null; }
+  const totalText=response.headers.get('content-range')?.split('/')[1];
+  const total=totalText&&/^\d+$/.test(totalText)?Number(totalText):null;
+  if(response.status===416&&withCount&&total!==null)return {rows:[],total};
   if(!response.ok) throw failure(response.status === 401 ? 'Please sign in again.' : (data?.message || data?.msg || 'Database request failed.'), response.status);
+  if(withCount){if(total===null)throw failure('The database did not return a result count.',502);return {rows:data||[],total};}
   return data;
 }
 async function allRows(table, access, query = 'order=id.asc') {
@@ -71,12 +77,36 @@ export function makeServer() { return createServer(async (req,res) => {
         res.setHeader('Set-Cookie',cookieName+'=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'+secure);return send(200,{ok:true});
       }
       if(url.pathname === '/api/workspace' && req.method === 'GET') {
-        const [organisations,policies,vehicles,coverage_periods,audit_logs,memberships]=await Promise.all([
-          allRows('organisations',access),allRows('policies',access),allRows('vehicles',access),allRows('coverage_periods',access),
+        const recent=fleetQuery(new URLSearchParams({limit:'5'})).query;
+        const allCount=fleetQuery(new URLSearchParams({limit:'1'})).query;
+        const activeCount=fleetQuery(new URLSearchParams({limit:'1',status:'active'})).query;
+        const [organisations,policies,recentRows,audit_logs,memberships,total,covered]=await Promise.all([
+          allRows('organisations',access),allRows('policies',access),
+          sb('/rest/v1/coverage_periods?'+recent,access),
           sb('/rest/v1/audit_logs?select=*&order=occurred_at.desc&limit=25',access),
-          sb('/rest/v1/memberships?select=organisation_id,role,active&user_id=eq.'+user.id,access)
+          sb('/rest/v1/memberships?select=organisation_id,role,active&user_id=eq.'+user.id,access),
+          sb('/rest/v1/coverage_periods?'+allCount,access,{method:'HEAD',withCount:true,headers:{Prefer:'count=exact'}}),
+          sb('/rest/v1/coverage_periods?'+activeCount,access,{method:'HEAD',withCount:true,headers:{Prefer:'count=exact'}})
         ]);
-        return send(200,normaliseWorkspace({organisations,policies,vehicles,coverage_periods,audit_logs,memberships}));
+        const data=normaliseWorkspace({organisations,policies,vehicles:[],coverage_periods:[],audit_logs,memberships});
+        return send(200,{...data,coverage_periods:normaliseCoverage(recentRows),summary:{periods:total.total,covered:covered.total}});
+      }
+      if(url.pathname === '/api/fleet' && req.method === 'GET') {
+        const {query,offset,limit}=fleetQuery(url.searchParams);
+        const page=await sb('/rest/v1/coverage_periods?'+query,access,{withCount:true,headers:{Prefer:'count=exact'}});
+        return send(200,{...page,rows:normaliseCoverage(page.rows),offset,limit});
+      }
+      if(url.pathname === '/api/reconciliations' && req.method === 'GET') {
+        const {query,offset,limit}=historyQuery(url.searchParams);
+        const page=await sb('/rest/v1/reconciliations?'+query,access,{withCount:true,headers:{Prefer:'count=exact'}});
+        return send(200,{...page,offset,limit});
+      }
+      if(url.pathname.startsWith('/api/reconciliations/') && req.method === 'GET') {
+        const id=checkedId(url.pathname.slice('/api/reconciliations/'.length));
+        const reports=await sb('/rest/v1/reconciliations?select=*&id=eq.'+id,access);
+        if(!reports.length)throw failure('Report not found in your authorised workspace.',404);
+        const lines=await allRows('reconciliation_lines',access,'reconciliation_id=eq.'+id+'&order=id.asc');
+        return send(200,{report:reports[0],lines});
       }
       if(url.pathname === '/api/coverage' && req.method === 'POST') {
         const data=await body(req); normaliseRegistration(data.registration);parseDate(data.starts_on);

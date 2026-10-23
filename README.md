@@ -46,3 +46,10 @@ The existing database permits backdating for specific privileged roles. This por
 Reports remain provisional. Do not use the date-only preview for invoices. Saved reports use the stored database rules snapshot, which can differ from preview assumptions. Rates, removal-day treatment, partial days, taxes/fees, corrections and policy expiry treatment require insurer sign-off. The existing database's reconciliation function is preserved, including its development default assumptions.
 
 See `PROJECT_STATUS.md` for validation and next steps.
+
+## Current increment: larger fleets and report history
+The vehicle register uses database pagination and search; the dashboard loads only recent periods and counts. The removal picker also searches/paginates open periods. Saved reconciliations can be reopened by month/policy and exported from their original snapshot.
+
+The domain **stratifyfleet.co.uk** has been purchased. It is not connected to hosting yet; keep APP_ORIGIN on localhost for development. No DNS changes have been made.
+
+GitHub Actions runs syntax and unit/API/render checks on Node 22 and 24. The selected local environment became unavailable during this increment, so check the pull request's CI results before treating these changes as verified. Browser sign-in and production readiness are still outstanding.
