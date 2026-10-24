@@ -431,6 +431,25 @@ try {
     check('Customers navigation is hidden from a customer', await page.locator('nav a:has-text("Customers")').count() === 0);
     await context.close(); }
 
+  // ---- rates and billing rules
+  { const { context, page } = await session('insurer@example.test');
+    await go(page, base + '/rates'); let t = await text(page);
+    check('insurer admin sees billing rules and daily rates with forms', t.includes('Billing rules') && t.includes('Add billing rules') && t.includes('£8.2100') && t.includes('Add a rate'), t.slice(-400));
+    check('billing rules form has no pre-selected start or end day choice', await page.locator('input[name=start]:checked').count() === 0 && await page.locator('input[name=end]:checked').count() === 0);
+    await page.fill('form:has-text("Save billing rules") input[name=from]', '2026-11-01'); await page.check('input[name=start][value=yes]'); await page.check('input[name=end][value=yes]');
+    await page.click('button:has-text("Save billing rules")'); await page.waitForSelector('text=Billing rules saved');
+    const br = (await calls()).find(c => c.rpc === 'set_billing_rules');
+    check('billing rules are sent with the insurer, date, explicit choices and zero tax', br && br.body.p_start_day_charged === true && br.body.p_end_day_charged === true && br.body.p_vat_rate === 0 && br.body.p_effective_from === '2026-11-01' && br.body.p_timezone === 'Europe/London', JSON.stringify(br));
+    await page.fill('form:has-text("Add rate to") input[name=from]', '2026-11-01'); await page.fill('form:has-text("Add rate to") input[name=rate]', '9.5');
+    await page.click('button:has-text("Add rate to")'); await page.waitForSelector('text=Rate saved');
+    const rc = (await calls()).find(c => c.rpc === 'set_daily_rate');
+    check('a daily rate is sent for the chosen policy', rc && rc.body.p_daily_rate === 9.5 && rc.body.p_effective_from === '2026-11-01', JSON.stringify(rc));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + '/rates'); check('a customer cannot open the rates page', new URL(page.url()).pathname !== '/rates', page.url());
+    check('Rates navigation is hidden from a customer', await page.locator('nav a:has-text("Rates")').count() === 0);
+    await context.close(); }
+
   // ---- mobile
   { const { context, page } = await session('platform@example.test', { width: 390, height: 800 });
     await go(page, base + '/fleet');

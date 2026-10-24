@@ -242,6 +242,11 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Platform only: move a customer to another insurer — refused while it has a live policy, vehicle on cover or open claim. The old insurer loses sight of that customer's history immediately. Everything is audited.
 - Tests: `supabase/tests/org_onboarding.sql` (13 checks, rolled back); e2e 141/141.
 - Assumption to review: insurer admins can create customers and policies for their own insurer only.
+
+## Rates and billing rules screen (hole B) — built, works through UI, backend and DB
+- `/rates` (platform, insurer admin: view and change; insurer accounts: view only). Billing rules history per insurer and daily-rate history per policy; forms call `set_billing_rules` / `set_daily_rate`. Append-only: a new entry applies from its date and earlier ones are kept.
+- No defaults are supplied: start-day and end-day charging have no pre-selected answer, tax rate starts at 0 and is labelled unconfirmed (IPT rate and whether quoted rates include it are still Owen's/the insurer's to confirm).
+- Tests: `supabase/tests/rates.sql` (9 checks); e2e 147/147.
 ## Maintenance bookings (24 Oct 2026)
 - Fleet CRM Maintenance now follows booked → checked in → work underway → ready to collect → collected/completed, plus cancellation. The board, task list and vehicle record share the workflow. Existing maintenance tasks can be set up as bookings with a garage and dates; otherwise their availability behaviour is retained.
 - Booking details: active fleet garage contact, appointment/expected-return dates, estimated and actual cost, notes, explicit off-road flag and an awaiting-approval flag. Approval is a work flag managed by CRM editors, not a separate financial authorisation role. Invoices are private fleet documents linked by fleet, vehicle and task; uploads use the existing 4 MB/type restrictions.

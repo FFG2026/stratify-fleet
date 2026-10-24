@@ -42,6 +42,8 @@ export const rolesOf = (ctx: Context) => ctx.memberships.filter(m => m.active).m
 export const canChange = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'fleet_admin', 'fleet_manager'].includes(r));
 export const canManageUsers = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'fleet_admin'].includes(r));
 export const canGenerate = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_accounts', 'fleet_admin', 'fleet_accounts'].includes(r));
+export const canViewRates = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_accounts'].includes(r));
+export const canManageRates = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin'].includes(r));
 export const canCreateCustomers = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin'].includes(r));
 export const isPlatform = (ctx: Context) => ctx.demo || rolesOf(ctx).includes('platform_super_admin');
 export const isInsurerSide = (ctx: Context) => ctx.demo || rolesOf(ctx).some(r => r === 'platform_super_admin' || r.startsWith('insurer_'));
