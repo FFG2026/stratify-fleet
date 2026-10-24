@@ -1,9 +1,9 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { rest, RestError } from '@/lib/rest';
+import { rest, rpc, RestError } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
-import { canWriteCrm, profileSchema, contactSchema, taskSchema, taskStatuses, type Task } from '@/lib/crm';
+import { canWriteCrm, profileSchema, contactSchema, taskSchema, taskStatuses, bookingFields, type Task } from '@/lib/crm';
 import { checkedId } from '@/lib/ids';
 import { normaliseRegistration, parseDate } from '@/lib/dates';
 import { maxFileBytes, sniffFile } from '@/lib/drivers';
@@ -39,6 +39,7 @@ export async function updateTask(form:FormData):Promise<ActionResult>{try{
  await writer();const id=checkedId(form.get('id')),status=z.enum(taskStatuses).parse(form.get('status'));
  const rows=await rest<Task[]>('/rest/v1/crm_tasks?select=*&id=eq.'+id);
  if(!rows.length)throw new RestError('Task not found in your fleet.',404);
+ if(rows[0].booking_stage)throw new RestError('Use the maintenance booking workflow to update this job.',400);
  // Limit the patch to task state and work notes. Fleet and insurance records cannot be changed here.
  const detail=z.string().trim().max(4000).parse(form.get('detail')||'');
  const due=String(form.get('due_on')||'');if(due)parseDate(due);
@@ -48,6 +49,8 @@ export async function updateTask(form:FormData):Promise<ActionResult>{try{
 }catch(e){return fail(e);}}
 export async function addDocument(form:FormData):Promise<ActionResult>{try{
  await writer();const fleet=checkedId(form.get('fleet_id')),vehicle=await vehicleFor(form,fleet);
+ const taskId=form.get('task_id')?checkedId(form.get('task_id')):null;
+ if(taskId){const tasks=await rest<Task[]>('/rest/v1/crm_tasks?select=*&id=eq.'+taskId+'&fleet_id=eq.'+fleet);if(!tasks[0]||tasks[0].vehicle_id!==vehicle)throw new RestError('Invoice must match this job and vehicle.',400);}
  const title=z.string().trim().min(1,'Enter a document title.').max(200).parse(form.get('title'));
  const file=form.get('file');if(!(file instanceof File)||!file.size)throw new RestError('Choose a PDF or photo.',400);
  if(file.size>maxFileBytes)throw new RestError('Choose a file under 4 MB.',400);
@@ -55,6 +58,23 @@ export async function addDocument(form:FormData):Promise<ActionResult>{try{
  const expires=String(form.get('expires_on')||'');if(expires)parseDate(expires);
  const path=fleet+'/'+crypto.randomUUID()+'.'+kind.ext;
  await uploadFile(path,bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength) as ArrayBuffer,kind.type,'fleet-documents');
- try{await rest('/rest/v1/crm_documents',{body:{fleet_id:fleet,vehicle_id:vehicle,title,storage_path:path,file_name:file.name.slice(0,200),content_type:kind.type,size_bytes:file.size,expires_on:expires||null}});}catch(e){await deleteFile(path,'fleet-documents');throw e;}
+ try{await rest('/rest/v1/crm_documents',{body:{fleet_id:fleet,vehicle_id:vehicle,task_id:taskId,title,storage_path:path,file_name:file.name.slice(0,200),content_type:kind.type,size_bytes:file.size,expires_on:expires||null}});}catch(e){await deleteFile(path,'fleet-documents');throw e;}
  return done('Document uploaded securely.');
+}catch(e){return fail(e);}}
+
+function bookingData(form:FormData){return bookingFields.parse({...Object.fromEntries(form),taken_off_road:form.get('taken_off_road')==='on',approval_required:form.get('approval_required')==='on'});}
+export async function createBooking(form:FormData):Promise<ActionResult>{try{
+ await writer();const fleet=checkedId(form.get('fleet_id')),vehicle=await vehicleFor(form,fleet);
+ if(!vehicle)throw new RestError('Choose a vehicle registration for this booking.',400);
+ const booking=bookingData(form);
+ if(!['booked','checked_in'].includes(booking.booking_stage))throw new RestError('Start with booked or checked in.',400);
+ const task=taskSchema.parse({...Object.fromEntries(form),fleet_id:fleet,vehicle_id:vehicle,due_on:booking.appointment_on,cost:booking.cost});
+ if(task.category==='task')throw new RestError('Choose a maintenance category.',400);
+ await rest('/rest/v1/crm_tasks',{body:{...task,...booking}});return done('Maintenance booking created.');
+}catch(e){return fail(e);}}
+export async function saveBooking(form:FormData):Promise<ActionResult>{try{
+ await writer();const id=checkedId(form.get('id')),data=bookingData(form);
+ const version=z.iso.datetime({offset:true}).parse(form.get('updated_at'));
+ await rpc('crm_update_booking',{p_id:id,p_expected_updated_at:version,p_data:data});
+ return done(data.booking_stage==='completed'?'Collection confirmed. Mileage and service details saved.':'Booking updated.');
 }catch(e){return fail(e);}}

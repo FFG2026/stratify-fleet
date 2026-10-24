@@ -2,12 +2,46 @@ import {describe,it,expect,vi} from 'vitest';
 vi.mock('server-only',()=>({}));
 const mockedRest=vi.hoisted(()=>({rest:vi.fn(),countRows:vi.fn()}));
 vi.mock('@/lib/rest',()=>mockedRest);
-import {canReadCrm,canWriteCrm,profileSchema,safeSearch,pageOffset,profileReminders,taskSchema,vehicleAvailability} from '@/lib/crm';
-import {crmVehicles,crmList,crmSummary,demoCrm} from '@/lib/crm-data';
+import {canReadCrm,canWriteCrm,profileSchema,safeSearch,pageOffset,profileReminders,taskSchema,vehicleAvailability,bookingFields,nextBookingStages,overdueBack} from '@/lib/crm';
+import {crmVehicles,crmList,crmSummary,demoCrm,bookingSummary,crmDue} from '@/lib/crm-data';
 import {demoOrgs,demoPolicies} from '@/lib/demo';
 import type {Context} from '@/lib/types';
 const ctx:Context={user:{id:'demo',email:'demo'},demo:true,orgs:demoOrgs,policies:demoPolicies,memberships:[]};
 describe('fleet CRM permissions, validation and demo',()=>{
+ it('keeps future bookings available, blocks checked-in/explicit off-road jobs, and waits for every job to close',()=>{
+  const d=demoCrm(),v={...d.vehicles[0],profile:{...d.vehicles[0].profile!,operational_status:'available' as const}};
+  const t={...d.tasks[0],vehicle_id:v.id,fleet_id:v.fleet_id,category:'service' as const,booking_stage:'booked' as const,taken_off_road:false};
+  expect(vehicleAvailability(v,[t])).toBe('available');
+  expect(vehicleAvailability(v,[{...t,taken_off_road:true}])).toBe('maintenance');
+  for(const stage of ['checked_in','work_underway','ready_to_collect'] as const)expect(vehicleAvailability(v,[{...t,booking_stage:stage}])).toBe('maintenance');
+  expect(vehicleAvailability(v,[{...t,booking_stage:'completed',status:'completed'},{...t,booking_stage:'checked_in',id:'second'}])).toBe('maintenance');
+  expect(vehicleAvailability(v,[{...t,booking_stage:'completed',status:'completed'}])).toBe('available');
+  expect(nextBookingStages('booked')).not.toContain('completed');expect(nextBookingStages('ready_to_collect')).toContain('completed');
+ });
+ it('validates booking dates and requires mileage, cost and resolved approval at collection',()=>{
+  const booking={booking_stage:'booked',supplier_id:'20000000-0000-4000-8000-000000000001',appointment_on:'2026-11-01',expected_return_on:'2026-11-02',estimated_cost:'250',cost:'',taken_off_road:false,approval_required:false,completion_mileage:'',next_service_on:'',next_service_mileage:'',detail:''};
+  expect(bookingFields.safeParse(booking).success).toBe(true);
+  expect(bookingFields.safeParse({...booking,expected_return_on:'2026-10-31'}).success).toBe(false);
+  expect(bookingFields.safeParse({...booking,booking_stage:'completed'}).success).toBe(false);
+  const complete={...booking,booking_stage:'completed',completion_mileage:'50000',cost:'0',next_service_mileage:'60000'};
+  expect(bookingFields.safeParse(complete).success).toBe(true);
+  expect(bookingFields.safeParse({...complete,approval_required:true}).success).toBe(false);
+  expect(bookingFields.safeParse({...complete,next_service_mileage:'49000'}).success).toBe(false);
+ });
+ it('filters booking stages, delays and approval flags and includes both appointment and return reminders',async()=>{
+  const stage=await crmList(ctx,'tasks',{fleet:'atlas',stage:'booked'});expect(stage.rows).toHaveLength(1);expect(stage.rows[0].booking_stage).toBe('booked');
+  const late=await crmList(ctx,'tasks',{fleet:'atlas',back:'1'});expect(late.rows).toHaveLength(1);expect(overdueBack(late.rows[0],'9999-01-01')).toBe(true);
+  const approvals=await crmList(ctx,'tasks',{fleet:'atlas',approval:'1'});expect(approvals.rows.every(t=>t.approval_required)).toBe(true);
+  const summary=await bookingSummary(ctx,'atlas');expect(summary).toEqual({booked:1,inGarage:2,late:1,approval:1});
+  const due=await crmDue(ctx,'atlas');expect(due.items.some(i=>i.source==='Garage appointment')).toBe(true);expect(due.items.some(i=>i.source==='Expected return')).toBe(true);
+ });
+ it('retains the selected stage when combining a live overdue-return filter and fleet scope',async()=>{
+  mockedRest.rest.mockResolvedValueOnce({rows:[],total:0});
+  const fleet='20000000-0000-4000-8000-000000000001';
+  await crmList({...ctx,demo:false},'tasks',{fleet,stage:'booked',back:'1'});
+  const url=mockedRest.rest.mock.calls.at(-1)![0] as string,q=new URLSearchParams(url.split('?')[1]);
+  expect(q.get('fleet_id')).toBe('eq.'+fleet);expect(q.get('booking_stage')).toBe('eq.booked');expect(q.get('and')).toBe('(booking_stage.not.is.null)');expect(q.get('expected_return_on')).toMatch(/^lt\./);
+ });
  it('keeps a vehicle unavailable until every maintenance task is closed, without losing its recorded status',()=>{
   const d=demoCrm(),v={...d.vehicles[0],profile:{...d.vehicles[0].profile!,operational_status:'available' as const}};
   const t={...d.tasks[0],vehicle_id:v.id,fleet_id:v.fleet_id,category:'repair' as const};
