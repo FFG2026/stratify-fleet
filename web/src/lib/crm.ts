@@ -24,13 +24,18 @@ export function safeSearch(value: string|undefined): string {
 }
 export function pageOffset(value?:string){const n=Number(value||0);if(!Number.isSafeInteger(n)||n<0||n>1000000)throw new Error('Invalid page.');return n;}
 export type VehicleProfile = z.infer<typeof profileSchema> & {id:string;updated_at:string};
-export type CrmVehicle = {id:string;fleet_id:string;registration:string;make_model:string|null;profile:VehicleProfile|null};
+export type CrmVehicle = {id:string;fleet_id:string;registration:string;make_model:string|null;profile:VehicleProfile|null;availability?:string|null};
 export type Contact = z.infer<typeof contactSchema> & {id:string;active:boolean;created_at:string};
 export type Task = z.infer<typeof taskSchema> & {id:string;status:typeof taskStatuses[number];created_at:string;updated_at:string};
 export type CrmDocument = {id:string;fleet_id:string;vehicle_id:string|null;title:string;storage_path:string;file_name:string;content_type:string;size_bytes:number;expires_on:string|null;created_at:string};
 export type CrmEvent = {id:string;fleet_id:string;vehicle_id:string|null;entity_type:string;action:string;occurred_at:string;after_state:Record<string,unknown>};
 export type DueItem = {id:string;fleet_id:string;vehicle_id:string|null;title:string;due_on:string;source:string;href:string};
 export const isOpen = (t:Task)=>!['completed','cancelled'].includes(t.status);
+export function vehicleAvailability(v:CrmVehicle,tasks:Task[]):string|null{
+ const status=v.profile?.operational_status||null;
+ if(status==='off_road'||status==='disposed')return status;
+ return tasks.some(t=>t.vehicle_id===v.id&&t.fleet_id===v.fleet_id&&t.category!=='task'&&isOpen(t))?'maintenance':status;
+}
 export function dueState(date:string|null,today:string){return !date?'No date':date<today?'Overdue':date===today?'Due today':'Upcoming';}
 export function profileReminders(vehicles:CrmVehicle[]):DueItem[]{
  return vehicles.flatMap(v=>{

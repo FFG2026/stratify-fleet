@@ -3,7 +3,7 @@ import { rest, countRows } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { today } from '@/lib/dates';
 import { demoPeriods, demoPolicies, demoOrgs } from '@/lib/demo';
-import { safeSearch, pageOffset, profileReminders, isOpen, type CrmVehicle, type VehicleProfile, type Contact, type Task, type CrmDocument, type CrmEvent, type DueItem } from './crm';
+import { safeSearch, pageOffset, profileReminders, isOpen, vehicleAvailability, type CrmVehicle, type VehicleProfile, type Contact, type Task, type CrmDocument, type CrmEvent, type DueItem } from './crm';
 import type { Context, Page } from './types';
 
 export type CrmParams={fleet?:string;q?:string;offset?:string;status?:string;category?:string;due?:string;vehicle?:string;view?:string;policy?:string};
@@ -20,7 +20,7 @@ export function demoCrm(){
  ]);
  const tasks:Task[]=fleets.flatMap(f=>Array.from({length:6},(_,i)=>({id:'task-'+f.id+'-'+i,fleet_id:f.id,vehicle_id:vehicles.find(v=>v.fleet_id===f.id)!.id,title:['Book MOT','Annual service','Replace rear tyres','Approve repair estimate','Check fleet documents','Collect repaired vehicle'][i],category:(['mot','service','tyre','repair','task','repair'] as const)[i],status:(['open','in_progress','open','awaiting_approval','open','completed'] as const)[i],priority:i===0?'high':'normal',due_on:day(i*3-3),assignee_id:'manager-'+f.id,supplier_id:i===4?null:'garage-'+f.id,detail:'Fictional example. Review the vehicle and record the next action.',cost:i===5?245:null,created_at:today(),updated_at:today()})));
  const documents:CrmDocument[]=fleets.map(f=>({id:'doc-'+f.id,fleet_id:f.id,vehicle_id:null,title:'Fleet operating handbook — example',storage_path:'',file_name:'example-handbook.pdf',content_type:'application/pdf',size_bytes:0,expires_on:day(60),created_at:today()}));
- return {vehicles,contacts,tasks,documents};
+ return {vehicles:vehicles.map(v=>({...v,availability:vehicleAvailability(v,tasks)})),contacts,tasks,documents};
 }
 const scope=(fleet?:string)=>fleet?'&fleet_id=eq.'+checkedId(fleet):'';
 export const selectedFleet=(ctx:Context,p:CrmParams)=>p.fleet || ctx.policies.find(x=>x.id===p.policy)?.customer_id || '';
@@ -31,12 +31,13 @@ export async function crmVehicles(ctx:Context,p:CrmParams):Promise<Page<CrmVehic
  const query=new URLSearchParams({select:'id,fleet_id,registration,make_model,profiles:crm_vehicle_profiles(*)',order:'registration.asc,id.asc',offset:String(offset),limit:'25'});
  if(fleet)query.set('fleet_id','eq.'+checkedId(fleet));if(q)query.set('or',`(registration.ilike.*${q.replace(/\s/g,'')}*,make_model.ilike.*${q}*)`);
  const page=await rest<{rows:(Omit<CrmVehicle,'profile'>&{profiles:VehicleProfile[]|VehicleProfile|null})[];total:number}>('/rest/v1/vehicles?'+query,{count:true});
- return {...page,offset,limit:25,rows:page.rows.map(v=>({...v,profile:Array.isArray(v.profiles)?v.profiles[0]||null:v.profiles}))};
+ const statuses=page.rows.length?await rest<{id:string;operational_status:string|null}[]>('/rest/v1/crm_vehicle_availability?select=id,operational_status&id=in.('+page.rows.map(v=>checkedId(v.id)).join(',')+')'):[];
+ return {...page,offset,limit:25,rows:page.rows.map(v=>({...v,availability:statuses.find(s=>s.id===v.id)?.operational_status??null,profile:Array.isArray(v.profiles)?v.profiles[0]||null:v.profiles}))};
 }
 export async function crmVehicle(ctx:Context,id:string):Promise<CrmVehicle|null>{
  if(ctx.demo)return demoCrm().vehicles.find(v=>v.id===id)||null;
  const rows=await rest<(Omit<CrmVehicle,'profile'>&{profiles:VehicleProfile[]|VehicleProfile|null})[]>('/rest/v1/vehicles?select=id,fleet_id,registration,make_model,profiles:crm_vehicle_profiles(*)&id=eq.'+checkedId(id));
- const v=rows[0];return v?{...v,profile:Array.isArray(v.profiles)?v.profiles[0]||null:v.profiles}:null;
+ const v=rows[0];if(!v)return null;const statuses=await rest<{operational_status:string|null}[]>('/rest/v1/crm_vehicle_availability?select=operational_status&id=eq.'+checkedId(id));return {...v,availability:statuses[0]?.operational_status??null,profile:Array.isArray(v.profiles)?v.profiles[0]||null:v.profiles};
 }
 export async function crmList<K extends 'tasks'|'contacts'|'documents'>(ctx:Context,kind:K,p:CrmParams):Promise<Page<K extends 'tasks'?Task:K extends 'contacts'?Contact:CrmDocument>>{
  type Row=K extends 'tasks'?Task:K extends 'contacts'?Contact:CrmDocument;
@@ -51,8 +52,8 @@ export async function crmList<K extends 'tasks'|'contacts'|'documents'>(ctx:Cont
  const page=await rest<{rows:Row[];total:number}>('/rest/v1/crm_'+kind+'?'+query,{count:true});return{...page,offset,limit:25};
 }
 export async function crmSummary(ctx:Context,fleet?:string){
- if(ctx.demo){const d=demoCrm(),vs=d.vehicles.filter(v=>!fleet||v.fleet_id===fleet),ts=d.tasks.filter(t=>!fleet||t.fleet_id===fleet);return{vehicles:vs.length,offRoad:vs.filter(v=>['off_road','maintenance'].includes(v.profile!.operational_status)).length,open:ts.filter(isOpen).length,overdue:ts.filter(t=>isOpen(t)&&t.due_on&&t.due_on<today()).length};}
- const s=scope(fleet),[vehicles,offRoad,open,overdue]=await Promise.all([countRows('vehicles','id=not.is.null'+s),countRows('crm_vehicle_profiles','operational_status=in.(off_road,maintenance)'+s),countRows('crm_tasks','status=not.in.(completed,cancelled)'+s),countRows('crm_tasks','status=not.in.(completed,cancelled)&due_on=lt.'+today()+s)]);return{vehicles,offRoad,open,overdue};
+ if(ctx.demo){const d=demoCrm(),vs=d.vehicles.filter(v=>!fleet||v.fleet_id===fleet),ts=d.tasks.filter(t=>!fleet||t.fleet_id===fleet);return{vehicles:vs.length,offRoad:vs.filter(v=>['off_road','maintenance'].includes(v.availability||'')).length,open:ts.filter(isOpen).length,overdue:ts.filter(t=>isOpen(t)&&t.due_on&&t.due_on<today()).length};}
+ const s=scope(fleet),[vehicles,offRoad,open,overdue]=await Promise.all([countRows('vehicles','id=not.is.null'+s),countRows('crm_vehicle_availability','operational_status=in.(off_road,maintenance)'+s),countRows('crm_tasks','status=not.in.(completed,cancelled)'+s),countRows('crm_tasks','status=not.in.(completed,cancelled)&due_on=lt.'+today()+s)]);return{vehicles,offRoad,open,overdue};
 }
 export async function crmDue(ctx:Context,fleet?:string):Promise<{items:DueItem[];limited:boolean}>{
  let vehicles:CrmVehicle[],tasks:Task[],documents:CrmDocument[];
