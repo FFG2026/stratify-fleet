@@ -34,9 +34,9 @@ export function BillingRulesForm({ insurer }: { insurer: string }) {
       {yn('end', 'The day cover ends (removal day)')}
       <label>Time zone<input name="timezone" required defaultValue="Europe/London" autoComplete="off" /></label>
       <label>Round amounts to (decimal places)<input name="dp" type="number" min={0} max={4} step={1} required defaultValue={2} /></label>
-      <label>Tax rate as a fraction (0 until confirmed)<input name="tax" inputMode="decimal" required defaultValue="0" autoComplete="off" /></label>
+      <label>Insurance Premium Tax (IPT) as a fraction. Standard rate 12% = 0.12, added on top of the daily rate<input name="tax" inputMode="decimal" required defaultValue="0.12" autoComplete="off" /></label>
       <label>Note (optional)<input name="note" maxLength={500} autoComplete="off" /></label>
-      <p className="subtext">These are your own billing terms. The portal sets no defaults and does not know your tax treatment; the tax rate is stored but reports show tax separately. Nothing is applied before its start date and earlier rules are kept.</p>
+      <p className="subtext">These are your own billing terms. Billing choices have no defaults. IPT is pre-filled at the standard 12% (GOV.UK, unchanged since 1 June 2017) on the basis that the insurer quotes a daily rate plus IPT; change it to 0 if your rates already include tax. Reports show net, IPT and gross separately. Nothing is applied before its start date and earlier rules are kept.</p>
       <div className="actions"><button className="primary" disabled={pending}>{pending ? 'Saving…' : 'Save billing rules'}</button></div>
       {status(result)}
     </form>

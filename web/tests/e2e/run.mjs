@@ -439,7 +439,7 @@ try {
     await page.fill('form:has-text("Save billing rules") input[name=from]', '2026-11-01'); await page.check('input[name=start][value=yes]'); await page.check('input[name=end][value=yes]');
     await page.click('button:has-text("Save billing rules")'); await page.waitForSelector('text=Billing rules saved');
     const br = (await calls()).find(c => c.rpc === 'set_billing_rules');
-    check('billing rules are sent with the insurer, date, explicit choices and zero tax', br && br.body.p_start_day_charged === true && br.body.p_end_day_charged === true && br.body.p_vat_rate === 0 && br.body.p_effective_from === '2026-11-01' && br.body.p_timezone === 'Europe/London', JSON.stringify(br));
+    check('billing rules are sent with the insurer, date, explicit choices and IPT at 12%', br && br.body.p_start_day_charged === true && br.body.p_end_day_charged === true && br.body.p_vat_rate === 0.12 && br.body.p_effective_from === '2026-11-01' && br.body.p_timezone === 'Europe/London', JSON.stringify(br));
     await page.fill('form:has-text("Add rate to") input[name=from]', '2026-11-01'); await page.fill('form:has-text("Add rate to") input[name=rate]', '9.5');
     await page.click('button:has-text("Add rate to")'); await page.waitForSelector('text=Rate saved');
     const rc = (await calls()).find(c => c.rpc === 'set_daily_rate');

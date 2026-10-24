@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getContext, canGenerate, getReport, getReportHistory, getMonthPreview, demoPreview, orgName, isDriverOnly } from '@/lib/data';
+import { getContext, canGenerate, canViewRates, getReport, getReportHistory, getMonthPreview, demoPreview, orgName, isDriverOnly } from '@/lib/data';
 import { PageHeader, Badge, Notice, Pagination } from '@/components/ui';
 import { MonthPicker, ParamSelect } from '@/components/ParamSelect';
 import { GenerateForm, PrintButton } from '@/components/ReportControls';
@@ -65,6 +65,11 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
           <div><strong>{rows.length.toLocaleString('en-GB')}</strong><span>VEHICLES IN MONTH</span></div>
           <div><strong>{rows.reduce((n, r) => n + r.days, 0).toLocaleString('en-GB')}</strong><span>INSURED VEHICLE-DAYS</span></div>
           <div><strong>{shown}</strong><span>REPORTING MONTH</span></div>
+          {saved && canViewRates(ctx) && saved.report.premium_net != null && <>
+            <div><strong>£{Number(saved.report.premium_net).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong><span>NET PREMIUM</span></div>
+            <div><strong>£{Number(saved.report.vat_amount ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong><span>IPT ({Number(saved.report.rules_snapshot?.vat_rate ?? 0) * 100}%)</span></div>
+            <div><strong>£{Number(saved.report.premium_gross ?? saved.report.premium_net).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</strong><span>GROSS</span></div>
+          </>}
         </div>
         <div className="table-scroll"><table>
           <thead><tr><th>REGISTRATION</th><th>CUSTOMER</th><th>POLICY</th><th>INSURED DAYS</th><th>REPORT STATUS</th></tr></thead>
