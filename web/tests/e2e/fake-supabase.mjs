@@ -148,6 +148,9 @@ export function startFake(port) {
       if (name === 'create_customer') { if (!['insurer_admin', 'platform_super_admin'].includes(u.role)) return json(403, { message: 'permission denied' }); return json(200, ids.f1); }
       if (['create_policy', 'renew_policy'].includes(name)) return json(200, '30000000-0000-4000-8000-000000000009');
       if (name === 'set_daily_rate' || name === 'set_billing_rules') { if (!['insurer_admin', 'platform_super_admin'].includes(u.role)) return json(403, { message: 'permission denied' }); return json(200, '40000000-0000-4000-8000-000000000001'); }
+      if (name === 'my_branding') return json(200, ['insurer@example.test', 'customer@example.test'].includes(email) ? [{ display_name: 'Example Mutual Fleet', accent: '#1A5C4B' }] : []);
+      if (name === 'set_branding') { if (u.role !== 'insurer_admin' && u.role !== 'platform_super_admin') return json(403, { message: 'permission denied' }); return json(200, null); }
+      if (name === 'audit_feed') { if (!['insurer_admin', 'platform_super_admin', 'fleet_admin'].includes(u.role)) return json(200, []); const all = [{ id: 3, occurred_at: '2026-10-22T10:00:00Z', actor_email: 'customer@example.test', actor_kind: 'user', organisation_id: ids.f1, action: 'coverage.added', entity_type: 'coverage_period', note: null, total: 2 }, { id: 2, occurred_at: '2026-10-21T10:00:00Z', actor_email: null, actor_kind: 'system', organisation_id: ids.f1, action: 'claim.created', entity_type: 'claim', note: 'Fictional', total: 2 }]; return json(200, body.p_action ? all.filter(a => a.action.startsWith(body.p_action)).map(a => ({ ...a, total: 1 })) : all); }
       if (name === 'add_member') return json(200, 'invited');
       if (name === 'my_cover') return json(200, email === 'driver@example.test' ? [
         { assignment_id: 'e0000000-0000-4000-8000-000000000001', vehicle_id: 'v1', registration: 'AB10XYZ', make_model: 'Ford Transit', assigned_from: '2026-01-01', assigned_to: null, cover_start: '2026-01-01T09:00:00Z', cover_end: null },
@@ -192,6 +195,8 @@ export function startFake(port) {
     if (path === 'vehicles') return json(200, (q.get('registration') || '') === 'eq.AB10XYZ' ? [{ id: 'f1000000-0000-4000-8000-000000000001' }] : []);
     if (path === 'vehicle_assignments' && (q.get('assigned_from') || '').startsWith('lte.')) return json(200, [{ vehicle_id: periods.find(p => p.fleet_id === ids.f1).vehicle_id, user_id: users['driver@example.test'].id, assigned_from: '2026-01-01' }]);
     if (path === 'vehicle_assignments') return json(200, [{ id: 'e0000000-0000-4000-8000-000000000001', user_id: users['driver@example.test'].id, vehicle_id: 'v1', assigned_from: '2026-01-01', assigned_to: null, vehicle: { registration: 'AB10XYZ', make_model: 'Ford Transit' } }]);
+    if (path === 'org_branding') return json(200, [{ display_name: 'Example Mutual Fleet', accent: '#1A5C4B' }]);
+    if (path === 'mipd_submissions') return page((q.get('submission_status') || '') === 'eq.queued' ? [{ id: 1 }, { id: 2 }, { id: 3 }] : []);
     if (path === 'billing_rules') return json(200, [{ id: 'br1', effective_from: '2026-01-01', start_day_charged: true, end_day_charged: true, timezone: 'Europe/London', rounding_dp: 2, vat_rate: 0, note: 'Fictional' }]);
     if (path === 'rate_cards') return json(200, [{ id: 'rc1', policy_id: (q.get('policy_id') || '').replace('eq.', ''), effective_from: '2026-01-01', daily_rate: 8.21, note: 'Fictional' }]);
     if (path === 'organisations') return page(allOrgs.filter(o => sees(o.id)));

@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 export type NavItem = { href: string; label: string; icon?: string; soon?: boolean; badge?: number };
 
-export function Sidebar({ items, planned }: { items: NavItem[]; planned: NavItem[] }) {
+export function Sidebar({ items, planned, brandName = null }: { items: NavItem[]; planned: NavItem[]; brandName?: string | null }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const link = (i: NavItem) => (
@@ -21,7 +21,7 @@ export function Sidebar({ items, planned }: { items: NavItem[]; planned: NavItem
           <span className="hamburger" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span>
         </button>
       </div>
-      <div className="brand"><img className="brand-logo" src="/stratify-logo.png" alt="Stratify" width={2048} height={688} /></div>
+      <div className="brand"><img className="brand-logo" src="/stratify-logo.png" alt="Stratify" width={2048} height={688} />{brandName && <div className="brand-name">{brandName}</div>}</div>
       <nav id="workspace-navigation" aria-label="Main navigation">
         <div className="nav-label">Workspace</div>
         {items.map(link)}

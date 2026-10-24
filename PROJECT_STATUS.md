@@ -284,3 +284,12 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Recipient lookup is a database function callable only with the service key (`claim_notification_emails`), which hands each notification out once. Needs `SUPABASE_SERVICE_ROLE_KEY` as well. Tests: `supabase/tests/claim_emails.sql` (4 checks), `web/tests/email.test.ts` (5), e2e unchanged.
 - **Needs Owen**: choose a provider (Resend assumed), verify a sending domain, then set `RESEND_API_KEY`, `EMAIL_FROM` and `SITE_URL` in Vercel. Password-reset emails are separate and go through Supabase's own SMTP setting (see hole D).
 - Not built: email for the fleet's own driver-licence reminders, digest emails, per-user email preferences.
+
+## Audit log, branding, MID/MIB status, cleanup (hole F)
+- **Audit log** (`/audit`; platform, insurer admin, customer admin): who did what and when, filtered by organisation and action prefix, 50 per page. Each person sees only organisations they are allowed to audit. It shows who, when, action, subject and note — not the before/after data.
+- **Branding** (`/branding`; platform, insurer admin): an insurer sets a name shown under the logo and an accent colour, shown to its staff and its customers' people (including drivers). Pale colours are refused for readability. The Stratify logo stays. **Not built: uploading the insurer's own logo.**
+- **MID / MIB status** (`/integrations`; platform, insurer admin, customer admin): read-only. States plainly that the portal is NOT connected, nothing has been sent, and a submission never confirms or creates cover; shows how many prepared records sit in each submission status. No endpoints or credentials invented.
+- `private.check_claim_fields` now has a pinned search path (advisor warning fixed).
+- Tests: `supabase/tests/audit_branding.sql` (11 checks); unit 57; e2e 169/169.
+- Not done on purpose: the GitHub repository is NOT made private automatically (a private repo can stop the free Vercel plan deploying from an organisation repo). Decision for Owen.
+- Decision still with Owen: whether insurer admins should keep the ability to add and remove cover (currently kept).

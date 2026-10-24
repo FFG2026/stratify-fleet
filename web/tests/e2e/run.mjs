@@ -484,6 +484,32 @@ try {
     check('it can be turned off again', (await calls()).some(x => x.auth === 'unenrol'));
     await context.close(); }
 
+  // ---- audit log, branding and MID/MIB status
+  { const { context, page } = await session('insurer@example.test');
+    check('insurer staff see their insurer\'s name under the logo', (await page.locator('.brand-name').innerText()) === 'Example Mutual Fleet');
+    check('the insurer\'s accent colour is applied', (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim().toLowerCase())) === '#1a5c4b');
+    await page.screenshot({ path: '/tmp/claude-0/-home-claude/dd628be3-af77-59a4-b016-016d6b523fa9/scratchpad/branding.png', clip: { x: 0, y: 0, width: 340, height: 260 } });
+    await go(page, base + '/audit'); let t = await text(page);
+    check('audit log lists who did what with the system marked', t.includes('coverage.added') && t.includes('customer@example.test') && t.includes('System') && t.includes('claim.created'), t.slice(-300));
+    await page.fill('input[name=action]', 'claim.'); await page.click('button:has-text("Filter")'); await page.waitForURL('**/audit?*action=claim.*'); t = await text(page);
+    check('audit log filters by action prefix', t.includes('claim.created') && !t.includes('coverage.added'), t.slice(-300));
+    await go(page, base + '/integrations'); t = await text(page);
+    check('MID/MIB page says plainly that nothing is connected or sent and that submission is not cover', t.includes('not connected') && t.includes('does not confirm or create cover') && t.includes('Queued'), t.slice(-500));
+    await go(page, base + '/branding'); t = await text(page);
+    check('branding page offers a name and colour', t.includes('Save branding') && t.includes('Accent colour'), t.slice(-300));
+    await page.evaluate(() => { const i = document.querySelector('input[name=accent]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, '#ffff00'); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.check('input[name=useAccent]'); await page.click('button:has-text("Save branding")'); await page.waitForSelector('text=too light to read');
+    check('a colour that is too pale is refused before it is saved', !(await calls()).some(x => x.rpc === 'set_branding' && x.body.p_accent === '#ffff00'));
+    await page.evaluate(() => { const i = document.querySelector('input[name=accent]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, '#1a5c4b'); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); });
+    await page.click('button:has-text("Save branding")'); await page.waitForSelector('text=Saved.');
+    const sb = (await calls()).find(x => x.rpc === 'set_branding' && x.body.p_accent === '#1a5c4b');
+    check('a readable colour and name are saved for the insurer', sb && sb.body.p_display_name === 'Example Mutual Fleet', JSON.stringify(sb));
+    await context.close(); }
+  { const { context, page } = await session('driver@example.test');
+    await go(page, base + '/audit'); check('a driver cannot open the audit log', new URL(page.url()).pathname !== '/audit', page.url());
+    await go(page, base + '/integrations'); check('a driver cannot open the MID/MIB page', new URL(page.url()).pathname !== '/integrations', page.url());
+    await context.close(); }
+
   // ---- mobile
   { const { context, page } = await session('platform@example.test', { width: 390, height: 800 });
     await go(page, base + '/fleet');
