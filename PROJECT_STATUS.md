@@ -276,3 +276,11 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
   4. Authentication → Providers → Email → enable "Leaked password protection" (a paid-plan feature).
   5. Multi-factor must be enabled for TOTP (Authentication → Multi-factor, normally on by default).
 - **Lost phone**: there are no recovery codes yet. An administrator at Supabase (Authentication → Users) has to remove the person's factor. A recovery-code feature is a sensible next step before requiring this for all administrators.
+
+## Email (hole E) — built; sends nothing until a provider key is set
+- Provider-agnostic sender (`web/src/lib/email.ts`, currently Resend over HTTPS). With `RESEND_API_KEY` and `EMAIL_FROM` unset it does nothing and the portal behaves exactly as before.
+- Sent after the action has finished (never delays or breaks the screen): (1) an "you have access" email when someone is added or invited to an organisation, including the first administrator of a new insurer or customer; it never contains a password; (2) a headline-plus-link email for every claim notification (new claim, sent to insurer, information requested, update, closed, etc.) to the same people who see it in the portal.
+- Claim emails carry only the headline and a link: no names, vehicle, location or amounts leave the portal by email.
+- Recipient lookup is a database function callable only with the service key (`claim_notification_emails`), which hands each notification out once. Needs `SUPABASE_SERVICE_ROLE_KEY` as well. Tests: `supabase/tests/claim_emails.sql` (4 checks), `web/tests/email.test.ts` (5), e2e unchanged.
+- **Needs Owen**: choose a provider (Resend assumed), verify a sending domain, then set `RESEND_API_KEY`, `EMAIL_FROM` and `SITE_URL` in Vercel. Password-reset emails are separate and go through Supabase's own SMTP setting (see hole D).
+- Not built: email for the fleet's own driver-licence reminders, digest emails, per-user email preferences.

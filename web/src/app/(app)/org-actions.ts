@@ -1,5 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { emailAccess } from '@/lib/notify-email';
 import { z } from 'zod';
 import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
@@ -32,6 +34,7 @@ export async function createInsurer(form: FormData): Promise<ActionResult> {
     const name = text(form.get('name'), 2, 120, 'Enter the insurer\'s name.'), email = memberEmail(form.get('email'));
     const id = await rpc<string>('create_insurer', { p_name: name, p_admin_email: email });
     const note = await firstAdminLogin(id, email, String(form.get('password') ?? ''));
+    after(() => emailAccess(email, name, 'administrator', !!form.get('password')));
     revalidatePath('/', 'layout');
     return done(`${name} was created and ${email} was invited as its administrator. ${note}`);
   } catch (error) { return fail(error); }
@@ -44,6 +47,7 @@ export async function createCustomer(form: FormData): Promise<ActionResult> {
     const insurer = checkedId(form.get('insurer')), name = text(form.get('name'), 2, 120, 'Enter the customer\'s name.'), email = memberEmail(form.get('email'));
     const id = await rpc<string>('create_customer', { p_insurer: insurer, p_name: name, p_admin_email: email });
     const note = await firstAdminLogin(id, email, String(form.get('password') ?? ''));
+    after(() => emailAccess(email, name, 'administrator', !!form.get('password')));
     revalidatePath('/', 'layout');
     return done(`${name} was created and ${email} was invited as its administrator. ${note}`, { redirectTo: '/organisations/' + id });
   } catch (error) { return fail(error); }

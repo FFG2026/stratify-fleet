@@ -1,5 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { emailClaimNotifications } from '@/lib/notify-email';
 import { z } from 'zod';
 import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
@@ -14,7 +16,7 @@ import type { ActionResult } from '@/components/useAction';
 export type ClaimResult = ActionResult & { id?: string };
 const done = (message: string, id?: string): ClaimResult => ({ ok: true, message, id });
 const fail = (error: unknown): ClaimResult => ({ ok: false, message: error instanceof z.ZodError ? error.issues[0]?.message ?? 'Check the details.' : error instanceof Error && !(error as { status?: number }).status && /^(Use a valid|Enter |Invalid calendar)/.test(error.message) ? error.message : messageOf(error) });
-const refresh = (id?: string) => { revalidatePath('/claims'); if (id) revalidatePath('/claims/' + id); };
+const refresh = (id?: string) => { revalidatePath('/claims'); if (id) { revalidatePath('/claims/' + id); after(() => emailClaimNotifications(id)); } };
 const str = (form: FormData, key: string, max = 4000) => { const v = String(form.get(key) ?? '').trim(); if (v.length > max) throw Object.assign(new Error('One of the boxes is too long.'), { status: 400 }); return v; };
 
 const fieldsSchema = z.object({

@@ -10,3 +10,11 @@ export async function siteUrl(): Promise<string> {
   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
   return `${proto}://${host}`;
 }
+
+// Address for links in emails sent after the response has gone: configuration only, since there is no request to read it from.
+export function staticSiteUrl(): string {
+  const fixed = process.env.SITE_URL?.trim().replace(/\/+$/, '');
+  if (fixed) return fixed;
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+  return vercel ? 'https://' + vercel : '';
+}

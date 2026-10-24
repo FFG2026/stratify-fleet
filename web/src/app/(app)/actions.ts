@@ -1,6 +1,8 @@
 'use server';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { emailAccess } from '@/lib/notify-email';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { rest, rpc } from '@/lib/rest';
@@ -8,7 +10,7 @@ import { requireContext, messageOf } from '@/lib/session';
 import { londonDate, effectiveFrom, monthBounds, normaliseRegistration, parseDate } from '@/lib/dates';
 import { checkedId } from '@/lib/ids';
 import { getFleetPage } from '@/lib/data';
-import { memberEmail, memberRole } from '@/lib/members';
+import { memberEmail, memberRole, roleLabels } from '@/lib/members';
 import { createLogin } from '@/lib/admin-auth';
 import { createLimiter, lookupVehicle, type VehicleSummary } from '@/lib/vehicle-lookup';
 import type { ActionResult } from '@/components/useAction';
@@ -118,7 +120,7 @@ export async function generateReport(form: FormData): Promise<ActionResult> {
 const passwordSchema = z.string().min(8, 'The temporary password must be at least 8 characters.').max(72, 'The temporary password is too long (72 characters at most).');
 
 export async function addMember(form: FormData): Promise<ActionResult> {
-  await requireContext();
+  const ctx = await requireContext();
   try {
     const org = checkedId(form.get('org')), email = memberEmail(form.get('email')), role = memberRole(form.get('role'));
     const rawPassword = String(form.get('password') ?? '');
@@ -127,6 +129,7 @@ export async function addMember(form: FormData): Promise<ActionResult> {
     // The database checks permission, role and organisation first; nothing is created in Supabase Auth unless that passes.
     const result = await rpc<string>('add_member', { p_org: org, p_email: email, p_role: role });
     revalidatePath('/users');
+    after(() => emailAccess(email, ctx.orgs.find(o => o.id === org)?.name ?? 'the portal', roleLabels[role] ?? role, !!password));
     if (result === 'added') return done('Added. They already had a login, so their existing password still works.');
     if (!password) return done('Invitation saved. It applies when they first sign in.');
     try { await createLogin(email, password); }
