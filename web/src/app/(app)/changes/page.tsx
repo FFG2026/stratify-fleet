@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getContext, canChange, getCoverActivity, orgName, isDriverOnly } from '@/lib/data';
+import { getContext, canChange, getCoverActivity, orgName, isDriverOnly, isInsurerOnly, homeFor } from '@/lib/data';
 import { PageHeader, LinkButton, Badge, Notice } from '@/components/ui';
 import { AddVehicleForm, RemoveVehicleForm } from '@/components/CoverForms';
 import { londonDateTime, today } from '@/lib/dates';
@@ -12,6 +12,7 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   if (isDriverOnly(ctx)) redirect('/driver');
+  if (isInsurerOnly(ctx)) redirect(homeFor(ctx));
   const sp = await searchParams;
   const mode = sp.mode === 'remove' ? 'remove' : 'add';
   const allowed = canChange(ctx);

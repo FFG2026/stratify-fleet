@@ -6,7 +6,7 @@ export const taskStatuses = ['open','in_progress','awaiting_approval','completed
 export const taskCategories = ['task','mot','tax','service','repair','tyre','inspection','breakdown'] as const;
 export const operationalStatuses = ['available','off_road','maintenance','disposed'] as const;
 export const labelOf = (s: string) => s.replaceAll('_',' ').replace(/^./,c=>c.toUpperCase());
-export const canReadCrm = (ctx: Context) => ctx.demo || ctx.memberships.some(m=>m.active && ['platform_super_admin','insurer_admin','fleet_admin','fleet_manager','fleet_accounts'].includes(m.role));
+export const canReadCrm = (ctx: Context) => ctx.demo || ctx.memberships.some(m=>m.active && ['platform_super_admin','fleet_admin','fleet_manager','fleet_accounts'].includes(m.role));
 export const canWriteCrm = (ctx: Context) => !ctx.demo && ctx.memberships.some(m=>m.active && ['platform_super_admin','fleet_admin','fleet_manager'].includes(m.role));
 const optionalDate = z.preprocess(v=>v===''||v==null?null:v,z.string().refine(v=>{try{parseDate(v);return true;}catch{return false;}},'Enter a valid date.').nullable());
 const optionalNumber = (max: number, integer=false) => z.preprocess(v=>v===''||v==null?null:Number(v), (integer?z.number().int():z.number()).min(0).max(max).nullable());

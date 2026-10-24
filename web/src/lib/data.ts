@@ -52,6 +52,8 @@ export function manageableOrgs(ctx: Context): Org[] {
 }
 export const orgName = (ctx: Context, id: string | null | undefined) => ctx.orgs.find(o => o.id === id)?.name || '—';
 // A person whose only access is as a driver sees the driver workspace, not the fleet's.
+export const isInsurerOnly = (ctx: Context) => !ctx.demo && rolesOf(ctx).length > 0 && rolesOf(ctx).every(r => r.startsWith('insurer_'));
+export const canSearchNational = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r));
 export const isDriverOnly = (ctx: Context) => !ctx.demo && rolesOf(ctx).length > 0 && rolesOf(ctx).every(r => r === 'driver');
 export const homeFor = (ctx: Context) => (isDriverOnly(ctx) ? '/driver' : isPlatform(ctx) ? '/overview' : isInsurerSide(ctx) ? '/insurer' : '/customer');
 

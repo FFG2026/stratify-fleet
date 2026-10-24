@@ -340,6 +340,35 @@ try {
     check('the report form has no horizontal scroll on a phone', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     await context.close(); }
 
+  // ---- insurer: no CRM or Manage cover, company-first drivers list, national search
+  { const { context, page } = await session('insurer@example.test');
+    const nav = (await page.locator('nav a').allInnerTexts()).map(x => x.replace(/[^A-Za-z/& ]/g, '').trim());
+    check('the insurer menu has no Fleet CRM or Manage cover', !nav.includes('Fleet CRM') && !nav.includes('Manage cover') && nav.includes('Drivers & licences'), JSON.stringify(nav));
+    await go(page, base + '/crm'); check('an insurer cannot open the Fleet CRM', new URL(page.url()).pathname !== '/crm', page.url());
+    await go(page, base + '/changes'); check('an insurer cannot open Manage cover', new URL(page.url()).pathname !== '/changes', page.url());
+    await go(page, base + '/drivers'); let t = await text(page);
+    check('the insurer first chooses a company, with no drivers listed yet', t.includes('Choose a company') && t.includes('Northbank Logistics') && !t.includes('Dana Driver'), t.slice(0, 400));
+    await Promise.all([urlHas(page, /fleet=/), page.click('a:has-text("See drivers") >> nth=0')]); await page.waitForSelector('text=Drivers at'); t = await text(page);
+    check('choosing a company lists its drivers', t.includes('Drivers at') && /Dana Driver|No drivers/.test(t), t.slice(0, 400));
+    await go(page, base + '/drivers/national'); t = await text(page);
+    check('the national search explains the data is self-entered and logged', t.includes('National driver search') && /logged against your account/.test(t), t.slice(0, 300));
+    await go(page, base + '/drivers/national?q=da'); t = await text(page);
+    check('a name shorter than three letters is refused', t.includes('at least three letters'), t.slice(0, 300));
+    await go(page, base + '/drivers/national?q=dana'); t = await text(page);
+    check('searching finds the opted-in driver with only the birth year', t.includes('Dana Driver') && t.includes('1988') && !t.includes('14/03/1988'), t.slice(0, 400));
+    await Promise.all([urlHas(page, /national\/[0-9a-f-]{36}/), page.click('a:has-text("Open history")')]); await page.waitForSelector('text=Job history'); t = await text(page);
+    check('opening a driver shows their history, marked as unverified', t.includes('Acme Haulage') && t.includes('Rear-ended at lights') && /not verified/i.test(t), t.slice(0, 500));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + '/drivers/national'); check('a fleet cannot use the national search', new URL(page.url()).pathname === '/drivers', page.url());
+    await context.close(); }
+  { const { context, page } = await session('driver@example.test');
+    await go(page, base + '/drivers'); const t = await text(page);
+    check('a driver sees the optional national database choice, unticked and separate', t.includes('National driver database (optional)') && !(await page.locator('input[aria-label="National driver database (optional)"]').isChecked()));
+    await page.locator('input[aria-label="National driver database (optional)"]').click(); await page.waitForSelector('text=Permission recorded');
+    check('ticking it records a separate national_database consent with the wording', (await calls()).some(c => c.rpc === 'record_driver_consent' && c.body.p_kind === 'national_database' && c.body.p_given === true && /national driver database/.test(c.body.p_statement)));
+    await context.close(); }
+
   // ---- account with no membership
   { const { context, page } = await session('nobody@example.test');
     await go(page, base + '/customer'); const t = await text(page);

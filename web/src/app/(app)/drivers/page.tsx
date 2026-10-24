@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getContext, getMembers, getAssignments, getDriverFile, listDrivers, canChange, canViewDrivers, isDriverOnly, type Assignment } from '@/lib/data';
+import { getContext, getMembers, getAssignments, getDriverFile, listDrivers, canChange, canViewDrivers, canSearchNational, isInsurerOnly, isInsurerSide, isDriverOnly, type Assignment } from '@/lib/data';
 import { PageHeader, Notice, Badge, Pagination } from '@/components/ui';
 import { ParamSelect } from '@/components/ParamSelect';
 import { AssignDriverForm, EndAssignmentButton } from '@/components/DriverControls';
@@ -11,7 +11,7 @@ import { completeness, historyGaps } from '@/lib/drivers';
 import { today } from '@/lib/dates';
 import Planned from '../[module]/page';
 
-type SP = { org?: string; fleet?: string; q?: string; offset?: string; view?: string };
+type SP = { org?: string; fleet?: string; q?: string; offset?: string; view?: string; co?: string };
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
 
 export default async function Drivers({ searchParams }: { searchParams: Promise<SP> }) {
@@ -46,17 +46,42 @@ async function MyFile({ ctx }: { ctx: NonNullable<Awaited<ReturnType<typeof getC
 
 async function Directory({ ctx, sp }: { ctx: NonNullable<Awaited<ReturnType<typeof getContext>>>; sp: SP }) {
   const fleets = ctx.orgs.filter(o => o.kind === 'customer');
-  const assignView = sp.view === 'assignments' && canChange(ctx);
+  const insurer = isInsurerSide(ctx) && !ctx.demo;
+  const assignView = sp.view === 'assignments' && canChange(ctx) && !isInsurerOnly(ctx);
   const header = <PageHeader title="Drivers & licences" subtitle="Driver details, documents, permissions and history." />;
-  const tabs = canChange(ctx) && (
+  const tabs = (canChange(ctx) && !isInsurerOnly(ctx)) ? (
     <div className="tabs-row">
       <Link prefetch={false} className={'button-link' + (assignView ? '' : ' primary')} href="/drivers">Drivers</Link>
       <Link prefetch={false} className={'button-link' + (assignView ? ' primary' : '')} href="/drivers?view=assignments">Vehicle assignments</Link>
+      {canSearchNational(ctx) && <Link prefetch={false} className="button-link" href="/drivers/national">National search</Link>}
     </div>
-  );
+  ) : canSearchNational(ctx) ? (
+    <div className="tabs-row">
+      <Link prefetch={false} className="button-link primary" href="/drivers">By company</Link>
+      <Link prefetch={false} className="button-link" href="/drivers/national">National search</Link>
+    </div>
+  ) : null;
   if (assignView) return <>{header}{tabs}<Assignments ctx={ctx} org={sp.org} fleets={fleets} /></>;
 
   const fleet = fleets.some(f => f.id === sp.fleet) ? sp.fleet! : '';
+  if (insurer && !fleet) {
+    const co = (sp.co ?? '').trim().slice(0, 60).toLowerCase();
+    const shown = fleets.filter(f => !co || f.name.toLowerCase().includes(co));
+    return (
+      <>
+        {header}{tabs}
+        <Notice>Choose a company to see its drivers. To look up a driver by name across every company that has joined the national database, use National search.</Notice>
+        <form method="get" className="filters"><label>Find a company<input name="co" defaultValue={sp.co ?? ''} autoComplete="off" placeholder="Start typing the company name" /></label><button>Search</button></form>
+        <section className="panel">
+          <div className="table-scroll"><table>
+            <thead><tr><th>Company</th><th></th></tr></thead>
+            <tbody>{shown.map(f => (<tr key={f.id}><td><strong>{f.name}</strong></td><td><Link prefetch={false} className="textbtn" href={'/drivers?fleet=' + f.id}>See drivers</Link></td></tr>))}</tbody>
+          </table></div>
+          {!shown.length && <div className="empty">{fleets.length ? 'No company matches that name.' : 'No companies are available to you.'}</div>}
+        </section>
+      </>
+    );
+  }
   const offset = Math.max(0, Number(sp.offset) || 0), q = (sp.q ?? '').slice(0, 60);
   let data = { rows: [] as Awaited<ReturnType<typeof listDrivers>>['rows'], total: 0 }, error = '';
   try { data = await listDrivers({ q, fleet: fleet || undefined, offset }); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load drivers.'; }
@@ -67,9 +92,10 @@ async function Directory({ ctx, sp }: { ctx: NonNullable<Awaited<ReturnType<type
       {header}
       {tabs}
       <Notice>Documents and history are provided by the drivers themselves. Opening a document is recorded in the audit trail. Recording a licence-check permission is not a licence check: the portal does not check licences with the DVLA yet.</Notice>
+      {insurer && <p className="subtext"><Link prefetch={false} className="textbtn" href="/drivers">← All companies</Link> · Drivers at <strong>{fleets.find(f => f.id === fleet)?.name}</strong></p>}
       <div className="filters">
         <DriverSearch initial={q} fleet={fleet} />
-        {fleets.length > 1 && <ParamSelect name="fleet" label="Fleet" value={fleet} options={[{ value: '', label: 'All fleets' }, ...fleets.map(o => ({ value: o.id, label: o.name }))]} />}
+        {fleets.length > 1 && !insurer && <ParamSelect name="fleet" label="Fleet" value={fleet} options={[{ value: '', label: 'All fleets' }, ...fleets.map(o => ({ value: o.id, label: o.name }))]} />}
       </div>
       {error && <Notice alert>{error}</Notice>}
       <section className="panel">
