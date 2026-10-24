@@ -19,6 +19,10 @@ export const consents = {
   data_sharing: {
     label: 'Sharing my details',
     statement: 'I understand that my details, documents and history on this page will be seen by my fleet operator and by the insurers of that fleet, for insurance and driver-safety purposes.'
+  },
+  national_database: {
+    label: 'National driver database (optional)',
+    statement: 'I choose to add my name, date of birth and the history I have entered on this page (jobs, claims and convictions) to the Stratify national driver database, so that insurers using Stratify can look me up and see it when they assess a policy or a claim. This is separate from sharing my details with my own fleet and I do not have to agree to drive for my fleet. My licence number, phone number and uploaded documents are not shared. I can withdraw at any time and I will stop appearing in searches straight away; an insurer that has already seen my details may have kept a record of them.'
   }
 } as const;
 export type ConsentKind = keyof typeof consents;
