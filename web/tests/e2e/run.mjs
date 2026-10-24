@@ -414,6 +414,23 @@ try {
     check('demo made no database data requests beyond sign-in', dbLog.filter(l => l.includes('tok-demo') && l.includes('/rest/v1/')).length === 0 && before >= 0, dbLog.filter(l => l.includes('tok-demo')).join(' | '));
     await context.close(); }
 
+  // ---- organisations: onboarding
+  { const { context, page } = await session('platform@example.test');
+    await go(page, base + '/organisations'); let t = await text(page);
+    check('platform admin sees insurers and customers with forms to add them', t.includes('Add an insurer') && t.includes('Add a customer') && t.includes('Northbank Logistics'), t.slice(-300));
+    check('Customers navigation is shown to the platform admin', await page.locator('nav a:has-text("Customers")').count() === 1);
+    await page.fill('form:has-text("Create insurer") input[name=name]', 'Test Mutual (FICTIONAL)'); await page.fill('form:has-text("Create insurer") input[name=email]', 'boss@example.test');
+    await page.click('button:has-text("Create insurer")'); await page.waitForSelector('text=was invited as its administrator');
+    const ci = (await calls()).find(c => c.rpc === 'create_insurer');
+    check('creating an insurer sends the name and first administrator email to the database function', ci && ci.body.p_name === 'Test Mutual (FICTIONAL)' && ci.body.p_admin_email === 'boss@example.test', JSON.stringify(ci));
+    await go(page, base + '/organisations/20000000-0000-4000-8000-000000000001'); t = await text(page);
+    check('customer page lists policies with add, end and renew controls', t.includes('Add a policy') && t.includes('Renew') && t.includes('Move this customer to a different insurer'), t.slice(-400));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    const r = await page.goto(base + '/organisations'); check('a customer cannot open the organisations page', new URL(page.url()).pathname !== '/organisations', page.url());
+    check('Customers navigation is hidden from a customer', await page.locator('nav a:has-text("Customers")').count() === 0);
+    await context.close(); }
+
   // ---- mobile
   { const { context, page } = await session('platform@example.test', { width: 390, height: 800 });
     await go(page, base + '/fleet');

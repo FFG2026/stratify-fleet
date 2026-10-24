@@ -118,6 +118,9 @@ export function startFake(port) {
         return json(200, { user_id: body.p_user, full_name: 'Dana Driver', date_of_birth: '1988-03-14', fleet_name: 'Northbank Logistics (FICTIONAL)', no_claims_declared_at: null, no_convictions_declared_at: '2026-09-01T10:00:00Z', shared_since: '2026-09-02T10:00:00Z',
           records: [{ kind: 'employment', title: 'Acme Haulage', detail: 'HGV driver', start_date: '2019-01-01', end_date: null, amount: null, at_fault: null, points: null }, { kind: 'claim', title: 'Rear-ended at lights', detail: null, start_date: '2022-05-04', end_date: null, amount: 1200, at_fault: false, points: null }] });
       }
+      if (name === 'create_insurer') return json(200, '10000000-0000-4000-8000-000000000009');
+      if (name === 'create_customer') { if (!['insurer_admin', 'platform_super_admin'].includes(u.role)) return json(403, { message: 'permission denied' }); return json(200, ids.f1); }
+      if (['create_policy', 'renew_policy'].includes(name)) return json(200, '30000000-0000-4000-8000-000000000009');
       if (name === 'add_member') return json(200, 'invited');
       if (name === 'my_cover') return json(200, email === 'driver@example.test' ? [
         { assignment_id: 'e0000000-0000-4000-8000-000000000001', vehicle_id: 'v1', registration: 'AB10XYZ', make_model: 'Ford Transit', assigned_from: '2026-01-01', assigned_to: null, cover_start: '2026-01-01T09:00:00Z', cover_end: null },
