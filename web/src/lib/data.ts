@@ -123,17 +123,23 @@ export async function getMonthPreview(month: string, policy?: string) {
   const [first, next] = monthBounds(month);
   const day = 86400000, iso = (ms: number) => new Date(ms).toISOString();
   const map = new Map<string, { policy_id: string; registration: string; days: number }>();
-  for (let offset = 0; offset < 10000; offset += 1000) {
+  type Row = { policy_id: string; cover_start: string; cover_end: string | null; vehicle: { registration: string } | null };
+  let offset = 0, total = Infinity, read = 0;
+  // Page by the database's own row count, so a server-side row cap can never silently drop vehicles.
+  while (offset < total && offset < 20000) {
     const query = new URLSearchParams({
       select: 'policy_id,cover_start,cover_end,vehicle:vehicles!inner(registration)',
       voided_at: 'is.null',
       cover_start: 'lt.' + iso(next + day),
       or: '(cover_end.is.null,cover_end.gt.' + iso(first - day) + ')',
-      order: 'id.asc', offset: String(offset), limit: '1000'
+      order: 'id.asc', offset: String(offset), limit: '500'
     });
     if (policy) query.set('policy_id', 'eq.' + checkedId(policy));
-    const batch = await rest<{ policy_id: string; cover_start: string; cover_end: string | null; vehicle: { registration: string } | null }[]>('/rest/v1/coverage_periods?' + query);
-    for (const r of batch) {
+    const page = await rest<{ rows: Row[]; total: number }>('/rest/v1/coverage_periods?' + query, { count: true });
+    total = page.total;
+    if (!page.rows.length) break;
+    offset += page.rows.length; read += page.rows.length;
+    for (const r of page.rows) {
       if (!r.vehicle) continue;
       let days = 0;
       try { days = insuredDays(londonDate(r.cover_start), r.cover_end ? londonDate(r.cover_end) : null, month); } catch { continue; }
@@ -141,8 +147,8 @@ export async function getMonthPreview(month: string, policy?: string) {
       const key = r.policy_id + ':' + r.vehicle.registration, hit = map.get(key);
       if (hit) hit.days += days; else map.set(key, { policy_id: r.policy_id, registration: r.vehicle.registration, days });
     }
-    if (batch.length < 1000) break;
   }
+  if (Number.isFinite(total) && read < total) throw new Error('The vehicle list is too large to preview. Narrow it to one policy.');
   return [...map.values()].sort((a, b) => a.registration.localeCompare(b.registration));
 }
 
