@@ -167,23 +167,27 @@ export type DriverProfile = { user_id: string; fleet_id: string; full_name: stri
 export type DriverDoc = { id: string; user_id: string; kind: string; file_name: string; content_type: string; size_bytes: number; uploaded_at: string; expires_on: string | null };
 export type DriverRecord = { id: string; user_id: string; kind: 'employment' | 'claim' | 'conviction'; title: string; detail: string | null; start_date: string; end_date: string | null; amount: number | null; at_fault: boolean | null; points: number | null };
 export type DriverConsent = { user_id: string; kind: string; given: boolean; version: string; recorded_at: string };
-export type DriverFile = { profile: DriverProfile | null; docs: DriverDoc[]; consents: DriverConsent[]; records: DriverRecord[] };
+export type CheckCode = { id: string; code: string; created_at: string; used_at: string | null };
+export type LicenceCheck = { id: string; checked_at: string; checked_by_email: string | null; status: string; points: number | null; entitlements: string | null; endorsements: string | null; notes: string | null; next_check_due: string | null };
+export type DriverFile = { profile: DriverProfile | null; docs: DriverDoc[]; consents: DriverConsent[]; records: DriverRecord[]; codes: CheckCode[]; checks: LicenceCheck[] };
 const docCols = 'id,user_id,kind,file_name,content_type,size_bytes,uploaded_at,expires_on';
 const recCols = 'id,user_id,kind,title,detail,start_date,end_date,amount,at_fault,points';
 
 // One driver's whole file. Row-level security limits it to the driver themself, their fleet and the fleet's insurers.
 export async function getDriverFile(userId: string): Promise<DriverFile> {
   const u = checkedId(userId);
-  const [profiles, docs, consents, records] = await Promise.all([
+  const [profiles, docs, consents, records, codes, checks] = await Promise.all([
     rest<DriverProfile[]>('/rest/v1/driver_profiles?select=*&user_id=eq.' + u),
     rest<DriverDoc[]>(`/rest/v1/driver_documents?select=${docCols}&user_id=eq.${u}&order=uploaded_at.desc&limit=100`),
     rest<DriverConsent[]>('/rest/v1/driver_consent_current?select=user_id,kind,given,version,recorded_at&user_id=eq.' + u),
-    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=eq.${u}&order=start_date.desc&limit=200`)
+    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=eq.${u}&order=start_date.desc&limit=200`),
+    rest<CheckCode[]>(`/rest/v1/driver_check_codes?select=id,code,created_at,used_at&user_id=eq.${u}&order=created_at.desc&limit=10`),
+    rest<LicenceCheck[]>(`/rest/v1/licence_checks?select=id,checked_at,checked_by_email,status,points,entitlements,endorsements,notes,next_check_due&user_id=eq.${u}&order=checked_at.desc&limit=50`)
   ]);
-  return { profile: profiles[0] ?? null, docs, consents, records };
+  return { profile: profiles[0] ?? null, docs, consents, records, codes, checks };
 }
 
-export type DriverRow = DriverProfile & { docKinds: string[]; licenceCheck: boolean; dataSharing: boolean; jobs: DriverRecord[]; claims: number; convictions: number };
+export type DriverRow = DriverProfile & { lastCheck: Pick<LicenceCheck, 'checked_at' | 'status' | 'next_check_due'> | null; docKinds: string[]; licenceCheck: boolean; dataSharing: boolean; jobs: DriverRecord[]; claims: number; convictions: number };
 const safeName = (q: string) => q.replace(/[^\p{L}\p{N} '.-]/gu, '').trim().slice(0, 60);
 export async function listDrivers(params: { q?: string; fleet?: string; offset?: number; limit?: number }): Promise<{ rows: DriverRow[]; total: number }> {
   const limit = params.limit ?? 25, offset = params.offset ?? 0;
@@ -194,13 +198,15 @@ export async function listDrivers(params: { q?: string; fleet?: string; offset?:
   const page = await rest<{ rows: DriverProfile[]; total: number }>('/rest/v1/driver_profiles?' + query, { count: true });
   if (!page.rows.length) return { rows: [], total: page.total };
   const ids = '(' + page.rows.map(p => checkedId(p.user_id)).join(',') + ')';
-  const [docs, consents, records] = await Promise.all([
+  const [docs, consents, records, checks] = await Promise.all([
     rest<{ user_id: string; kind: string }[]>('/rest/v1/driver_documents?select=user_id,kind&user_id=in.' + ids + '&limit=1000'),
     rest<DriverConsent[]>('/rest/v1/driver_consent_current?select=user_id,kind,given,version,recorded_at&user_id=in.' + ids),
-    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=in.${ids}&limit=2000`)
+    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=in.${ids}&limit=2000`),
+    rest<(Pick<LicenceCheck, 'checked_at' | 'status' | 'next_check_due'> & { user_id: string })[]>('/rest/v1/licence_checks?select=user_id,checked_at,status,next_check_due&order=checked_at.desc&limit=2000&user_id=in.' + ids)
   ]);
   const rows = page.rows.map(p => ({
     ...p,
+    lastCheck: checks.find(c => c.user_id === p.user_id) ?? null,
     docKinds: docs.filter(d => d.user_id === p.user_id).map(d => d.kind),
     licenceCheck: consents.some(c => c.user_id === p.user_id && c.kind === 'licence_check' && c.given),
     dataSharing: consents.some(c => c.user_id === p.user_id && c.kind === 'data_sharing' && c.given),

@@ -1,7 +1,8 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useAction } from '@/components/useAction';
-import { saveDriverProfile, uploadDriverDocument, removeDriverDocument, setDriverConsent, addDriverRecord, removeDriverRecord, declareNone } from '@/app/(app)/driver-actions';
+import { isHeic } from '@/lib/drivers';
+import { addCheckCode, recordLicenceCheck, saveDriverProfile, uploadDriverDocument, removeDriverDocument, setDriverConsent, addDriverRecord, removeDriverRecord, declareNone } from '@/app/(app)/driver-actions';
 import type { DriverProfile } from '@/lib/data';
 
 const status = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={'form-note' + (r && !r.ok ? ' form-error' : '')}>{r?.message}</div>;
@@ -23,7 +24,9 @@ export function ProfileForm({ profile, email }: { profile: DriverProfile | null;
 
 // Phone photos are large. Shrink pictures in the browser so they upload quickly and stay under the 4 MB limit.
 async function shrink(file: File): Promise<File> {
-  if (!/^image\/(jpeg|png|webp)$/.test(file.type) || (file.size < 1_500_000)) return file;
+  // iPhone photos can arrive as HEIC (for example when picked from the Files app); Safari can read them, so convert them here.
+  const heic = isHeic(file);
+  if (!heic && (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1_500_000)) return file;
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 2200 / Math.max(bitmap.width, bitmap.height));
@@ -31,7 +34,7 @@ async function shrink(file: File): Promise<File> {
     canvas.width = Math.round(bitmap.width * scale); canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
-    return blob && blob.size < file.size ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
+    return blob && (heic || blob.size < file.size) ? new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
   } catch { return file; }
 }
 
@@ -54,7 +57,7 @@ export function UploadForm({ kind, label, hint, withExpiry }: { kind: string; la
     <form ref={form} className="upload" onSubmit={submit}>
       <input type="hidden" name="kind" value={kind} />
       <div><strong>{label}</strong><p className="subtext">{hint}</p></div>
-      <label>File<input name="file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required aria-label={`${label}: choose a file`} /></label>
+      <label>File<input name="file" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf" required aria-label={`${label}: choose a file`} /></label>
       {withExpiry && <label>Expiry date (optional)<input name="expires" type="date" /></label>}
       <button disabled={pending || busy}>{pending || busy ? 'Uploading…' : 'Upload'}</button>
       {status(result)}
@@ -120,6 +123,43 @@ export function RecordForm({ kind }: { kind: 'employment' | 'claim' | 'convictio
       {kind === 'conviction' && <label>Penalty points<input name="points" type="number" min="0" max="12" step="1" inputMode="numeric" /></label>}
       <div className="actions"><button className="primary" disabled={pending}>Add</button></div>
       {status(result)}
+    </form>
+  );
+}
+
+export function CheckCodeForm() {
+  const { pending, result, onSubmit } = useAction(addCheckCode);
+  return (
+    <form className="filters" onSubmit={onSubmit}>
+      <label>Your check code<input name="code" required minLength={6} maxLength={16} autoComplete="off" spellCheck={false} autoCapitalize="characters" placeholder="From the gov.uk service" /></label>
+      <button className="primary" disabled={pending}>Save code</button>
+      <div role="status" aria-live="polite" className={'form-note' + (result && !result.ok ? ' form-error' : '')}>{result?.message}</div>
+    </form>
+  );
+}
+
+export function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button type="button" aria-label={`Copy ${label}`} onClick={async () => {
+      try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
+    }}>{copied ? 'Copied' : 'Copy'}</button>
+  );
+}
+
+export function RecordCheckForm({ driver, nextDue }: { driver: string; nextDue: string }) {
+  const { pending, result, onSubmit } = useAction(recordLicenceCheck);
+  return (
+    <form className="form-grid" onSubmit={onSubmit}>
+      <input type="hidden" name="driver" value={driver} />
+      <label>Result on the DVLA site<select name="status" defaultValue="" required><option value="" disabled>Choose</option><option value="valid">Licence valid</option><option value="not_valid">Licence not valid</option><option value="could_not_check">Could not check</option></select></label>
+      <label>Penalty points<input name="points" type="number" min="0" max="36" step="1" inputMode="numeric" /></label>
+      <label>Entitlements (categories)<input name="entitlements" maxLength={200} placeholder="For example B, BE, C1" autoComplete="off" /></label>
+      <label>Endorsements<input name="endorsements" maxLength={500} placeholder="For example SP30, 2025-01-01, 3 points" autoComplete="off" /></label>
+      <label>Notes<input name="notes" maxLength={500} autoComplete="off" /></label>
+      <label>Check again by<input name="next" type="date" defaultValue={nextDue} /></label>
+      <div className="actions"><button className="primary" disabled={pending}>Record check</button></div>
+      <div role="status" aria-live="polite" className={'form-note' + (result && !result.ok ? ' form-error' : '')}>{result?.message}</div>
     </form>
   );
 }

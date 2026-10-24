@@ -1,7 +1,7 @@
 import type { DriverFile, DriverRecord } from '@/lib/data';
-import { Badge } from '@/components/ui';
-import { RemoveButton, ConsentBox, DeclareNone, RecordForm, UploadForm } from '@/components/DriverForms';
-import { consents, documentKinds, historyGaps, completeness } from '@/lib/drivers';
+import { Badge, Notice } from '@/components/ui';
+import { RemoveButton, ConsentBox, DeclareNone, RecordForm, UploadForm, CheckCodeForm, CopyButton, RecordCheckForm } from '@/components/DriverForms';
+import { consents, documentKinds, historyGaps, completeness, dvlaCheckUrl, dvlaShareUrl, dvlaNorthernIrelandUrl, lastEight, codeLatestExpiry, checkStatusLabel } from '@/lib/drivers';
 import { londonShortDate, today } from '@/lib/dates';
 
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
@@ -122,5 +122,73 @@ export function History({ file, editable }: { file: DriverFile; editable: boolea
         {editable && <>{!convictions.length && !file.profile?.no_convictions_declared_at && file.profile && <DeclareNone kind="convictions" label="I have no motoring convictions or penalty points" />}<RecordForm kind="conviction" /></>}
       </div></section>
     </>
+  );
+}
+
+function CheckHistory({ file }: { file: DriverFile }) {
+  if (!file.checks.length) return <p className="subtext">No licence check has been recorded yet.</p>;
+  return (
+    <div className="table-scroll"><table>
+      <thead><tr><th>Checked</th><th>Result</th><th>Points</th><th>Entitlements</th><th>Endorsements</th><th>Notes</th><th>By</th><th>Check again by</th></tr></thead>
+      <tbody>{file.checks.map(c => (
+        <tr key={c.id}><td>{londonShortDate(c.checked_at)}</td><td>{c.status === 'valid' ? <Badge>{checkStatusLabel[c.status]}</Badge> : <Badge warn>{checkStatusLabel[c.status] ?? c.status}</Badge>}</td>
+          <td>{c.points ?? '—'}</td><td>{c.entitlements || '—'}</td><td>{c.endorsements || '—'}</td><td>{c.notes || '—'}</td><td>{c.checked_by_email || '—'}</td><td>{c.next_check_due ? day(c.next_check_due) : '—'}</td></tr>
+      ))}</tbody>
+    </table></div>
+  );
+}
+
+// The driver's side: give permission, make a code on gov.uk, paste it here.
+export function LicenceCheckDriver({ file }: { file: DriverFile }) {
+  const allowed = file.consents.some(c => c.kind === 'licence_check' && c.given);
+  const code = file.codes[0];
+  return (
+    <section className="panel"><div className="panel-body">
+      <div className="cardhead"><h2>Licence check</h2></div>
+      {!allowed
+        ? <p className="subtext">To let your fleet check your licence, tick the licence check permission above. Then you can add a check code here.</p>
+        : (
+          <>
+            <ol className="steps">
+              <li><a href={dvlaShareUrl} target="_blank" rel="noopener noreferrer">Make a check code on gov.uk (opens in a new tab)</a>. It is free, works once, and lasts 21 days.</li>
+              <li>Paste the code here. Your fleet then uses it to check your licence on the DVLA website.</li>
+            </ol>
+            <CheckCodeForm />
+            {code && <p className="subtext">Last code added {londonShortDate(code.created_at)}{code.used_at ? ` and used ${londonShortDate(code.used_at)}. Make a new one if your fleet asks.` : '. Waiting for your fleet to use it.'}</p>}
+          </>
+        )}
+      <h3>Checks on your licence</h3>
+      <CheckHistory file={file} />
+    </div></section>
+  );
+}
+
+// The staff side: what to copy, a one-click link to the DVLA, and a form to record what it showed.
+export function LicenceCheckStaff({ file, driver }: { file: DriverFile; driver: string }) {
+  const allowed = file.consents.some(c => c.kind === 'licence_check' && c.given);
+  const eight = lastEight(file.profile?.licence_number ?? null);
+  const code = file.codes[0];
+  const fresh = !!code && !code.used_at && Date.parse(codeLatestExpiry(code.created_at)) > Date.now();
+  const next = new Date(); next.setUTCMonth(next.getUTCMonth() + 6);
+  return (
+    <section className="panel"><div className="panel-body">
+      <div className="cardhead"><h2>Licence check</h2>{file.checks[0] ? <Badge warn={file.checks[0].status !== 'valid'}>Last: {checkStatusLabel[file.checks[0].status]} {londonShortDate(file.checks[0].checked_at)}</Badge> : <Badge warn>Not checked</Badge>}</div>
+      {!allowed ? <Notice>This driver has not given permission for licence checks, so do not check their licence.</Notice> : (
+        <>
+          <p className="subtext">The portal does not contact the DVLA. Copy the details below, open the DVLA service, and record what it shows. You must have the driver's permission, which is recorded above.</p>
+          <dl className="details">
+            <div><dt>Last 8 characters of licence number</dt><dd>{eight ? <><span className="registration">{eight}</span> <CopyButton value={eight} label="licence number characters" /></> : 'Driver has not added their licence number'}</dd></div>
+            <div><dt>Check code from the driver</dt><dd>{code ? <><span className="registration">{code.code}</span> <CopyButton value={code.code} label="check code" /></> : 'Waiting for the driver to add a code'}
+              {code && <p className="subtext">{code.used_at ? `Used ${londonShortDate(code.used_at)}. Ask the driver for a new code.` : fresh ? `Added ${londonShortDate(code.created_at)}. Works once, within 21 days of the driver making it.` : `Added ${londonShortDate(code.created_at)}. It may have expired; ask the driver for a new code.`}</p>}</dd></div>
+          </dl>
+          <p><a className="button-link primary" href={dvlaCheckUrl} target="_blank" rel="noopener noreferrer">Open the DVLA check in a new tab</a></p>
+          <p className="subtext">GB licences only. For a Northern Ireland licence use the <a href={dvlaNorthernIrelandUrl} target="_blank" rel="noopener noreferrer">DVA service</a>.</p>
+          <h3>Record the result</h3>
+          <RecordCheckForm driver={driver} nextDue={next.toISOString().slice(0, 10)} />
+        </>
+      )}
+      <h3>Previous checks</h3>
+      <CheckHistory file={file} />
+    </div></section>
   );
 }

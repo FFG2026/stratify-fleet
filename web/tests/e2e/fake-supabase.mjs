@@ -111,6 +111,8 @@ export function startFake(port) {
         { assignment_id: 'e0000000-0000-4000-8000-000000000001', vehicle_id: 'v1', registration: 'AB10XYZ', make_model: 'Ford Transit', assigned_from: '2026-01-01', assigned_to: null, cover_start: '2026-01-01T09:00:00Z', cover_end: null },
         { assignment_id: 'e0000000-0000-4000-8000-000000000002', vehicle_id: 'v2', registration: 'ZZ99OLD', make_model: 'Vauxhall Vivaro', assigned_from: '2026-01-01', assigned_to: '2026-03-01', cover_start: '2026-01-01T09:00:00Z', cover_end: '2026-03-01T00:00:00Z' }
       ] : []);
+      if (name === 'add_check_code') return json(200, 'c1000000-0000-4000-8000-000000000002');
+      if (name === 'record_licence_check') return json(200, 'c2000000-0000-4000-8000-000000000002');
       if (name === 'remove_driver_document') return json(200, ids.f1 + '/' + users['driver@example.test'].id + '/old.png');
       if (name === 'assign_driver' || name === 'end_assignment') return json(200, 'e0000000-0000-4000-8000-000000000009');
       if (name === 'generate_reconciliation') return json(200, report.id);
@@ -137,6 +139,9 @@ export function startFake(port) {
       return json(200, docs.filter(r => mine(r) && (!id || r.id === id) && (!uid.startsWith('eq.') || r.user_id === uid.slice(3)) && (!uid.startsWith('in.') || uid.includes(r.user_id))));
     }
     if (path === 'driver_consent_current') return json(200, [{ user_id: driverId, fleet_id: ids.f1, kind: 'licence_check', given: true, version: 'v1', recorded_at: '2026-09-03T10:00:00Z' }].filter(r => mine(r) && (!(q.get('user_id') || '').startsWith('eq.') || r.user_id === q.get('user_id').slice(3))));
+    const byUser = rows => rows.filter(r => mine(r) && (!(q.get('user_id') || '').startsWith('eq.') || r.user_id === q.get('user_id').slice(3)) && (!(q.get('user_id') || '').startsWith('in.') || q.get('user_id').includes(r.user_id)));
+    if (path === 'driver_check_codes') return json(200, byUser([{ id: 'c1000000-0000-4000-8000-000000000001', user_id: driverId, fleet_id: ids.f1, code: 'AB12 CD34', created_at: new Date().toISOString(), used_at: null }]));
+    if (path === 'licence_checks') return json(200, byUser([{ id: 'c2000000-0000-4000-8000-000000000001', user_id: driverId, fleet_id: ids.f1, checked_at: '2026-09-10T10:00:00Z', checked_by_email: 'customer@example.test', status: 'valid', points: 0, entitlements: 'B, BE', endorsements: null, notes: 'First check', next_check_due: '2027-03-10' }]));
     if (path === 'driver_records') return json(200, [
       { id: 'r1000000-0000-4000-8000-000000000001', user_id: driverId, fleet_id: ids.f1, kind: 'employment', title: 'Acme Haulage', detail: 'HGV driver', start_date: '2022-01-01', end_date: null, amount: null, at_fault: null, points: null },
       { id: 'r1000000-0000-4000-8000-000000000002', user_id: driverId, fleet_id: ids.f1, kind: 'claim', title: 'Rear-end collision', detail: null, start_date: '2025-02-01', end_date: null, amount: 1250, at_fault: false, points: null }

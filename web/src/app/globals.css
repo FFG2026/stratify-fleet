@@ -102,3 +102,5 @@ a.button-link{display:inline-block;background:white;color:var(--ink);border:1px 
 .tabs-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
 .details{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin:0}.details dt{font-size:11px;color:var(--muted);letter-spacing:.6px;text-transform:uppercase}.details dd{margin:4px 0 0;font-weight:600;overflow-wrap:anywhere}
 .form-error{color:#9a3b2c}
+.steps{margin:0 0 14px;padding-left:20px;display:grid;gap:6px}.steps a{color:var(--accent);font-weight:600}
+.panel h3{margin:18px 0 8px}

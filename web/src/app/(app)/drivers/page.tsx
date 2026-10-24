@@ -6,7 +6,7 @@ import { ParamSelect } from '@/components/ParamSelect';
 import { AssignDriverForm, EndAssignmentButton } from '@/components/DriverControls';
 import { DriverSearch } from '@/components/DriverSearch';
 import { ProfileForm } from '@/components/DriverForms';
-import { Checklist, Documents, History, Permissions } from '@/components/DriverFile';
+import { Checklist, Documents, History, Permissions, LicenceCheckDriver } from '@/components/DriverFile';
 import { completeness, historyGaps } from '@/lib/drivers';
 import { today } from '@/lib/dates';
 import Planned from '../[module]/page';
@@ -36,7 +36,7 @@ async function MyFile({ ctx }: { ctx: NonNullable<Awaited<ReturnType<typeof getC
           <Checklist file={file} />
           <section className="panel"><div className="panel-body"><div className="cardhead"><h2>Your details</h2></div><ProfileForm profile={file.profile} email={ctx.user.email} /></div></section>
           {file.profile
-            ? <><Documents file={file} editable /><Permissions file={file} editable /><History file={file} editable /></>
+            ? <><Documents file={file} editable /><Permissions file={file} editable /><LicenceCheckDriver file={file} /><History file={file} editable /></>
             : <Notice>Save your details first. Then you can upload documents, give permissions and add your history.</Notice>}
         </>
       )}
@@ -74,7 +74,7 @@ async function Directory({ ctx, sp }: { ctx: NonNullable<Awaited<ReturnType<type
       {error && <Notice alert>{error}</Notice>}
       <section className="panel">
         <div className="table-scroll"><table>
-          <thead><tr><th>Driver</th><th>Fleet</th><th>Licence photos</th><th>Right to work</th><th>Licence check permission</th><th>Job history</th><th>Claims</th><th>Convictions</th><th>File</th></tr></thead>
+          <thead><tr><th>Driver</th><th>Fleet</th><th>Licence photos</th><th>Right to work</th><th>Licence check permission</th><th>Last licence check</th><th>Job history</th><th>Claims</th><th>Convictions</th><th>File</th></tr></thead>
           <tbody>
             {data.rows.map(r => {
               const items = completeness({ profile: r, docKinds: r.docKinds, licenceCheck: r.licenceCheck, dataSharing: r.dataSharing, jobs: r.jobs, claims: r.claims, convictions: r.convictions }, t);
@@ -87,6 +87,7 @@ async function Directory({ ctx, sp }: { ctx: NonNullable<Awaited<ReturnType<type
                   <td>{r.docKinds.includes('licence_front') && r.docKinds.includes('licence_back') ? <Badge>Uploaded</Badge> : <Badge warn>Missing</Badge>}</td>
                   <td>{r.docKinds.includes('right_to_work') ? <Badge>Uploaded</Badge> : <Badge warn>Missing</Badge>}</td>
                   <td>{r.licenceCheck ? <Badge>Given</Badge> : <Badge warn>Not given</Badge>}</td>
+                  <td>{r.lastCheck ? <>{r.lastCheck.status === 'valid' ? <Badge>Valid</Badge> : <Badge warn>{r.lastCheck.status === 'not_valid' ? 'Not valid' : 'Could not check'}</Badge>} <span className="subtext">{new Date(r.lastCheck.checked_at).toLocaleDateString('en-GB', { timeZone: 'Europe/London' })}</span></> : <Badge warn>Never</Badge>}</td>
                   <td>{gaps === -1 ? <Badge warn>None</Badge> : gaps === 0 ? <Badge>3 years</Badge> : <Badge warn>Gaps</Badge>}</td>
                   <td>{r.claims || (r.no_claims_declared_at ? 'None' : '—')}</td><td>{r.convictions || (r.no_convictions_declared_at ? 'None' : '—')}</td>
                   <td>{done} / {items.length}</td>
