@@ -3,9 +3,9 @@ import { rpc } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { parseDate } from '@/lib/dates';
 
-export type NationalMatch = { user_id: string; full_name: string; birth_year: number | null; date_of_birth: string | null; fleet_name: string };
+export type NationalMatch = { user_id: string; full_name: string; birth_year: number | null; date_of_birth: string | null; fleet_name: string | null };
 export type NationalRecord = { kind: 'employment' | 'claim' | 'conviction'; title: string; detail: string | null; start_date: string; end_date: string | null; amount: number | null; at_fault: boolean | null; points: number | null };
-export type NationalFile = { user_id: string; full_name: string; date_of_birth: string | null; fleet_name: string; no_claims_declared_at: string | null; no_convictions_declared_at: string | null; shared_since: string; records: NationalRecord[] };
+export type NationalFile = { user_id: string; full_name: string; date_of_birth: string | null; fleet_name: string | null; no_claims_declared_at: string | null; no_convictions_declared_at: string | null; shared_since: string; records: NationalRecord[] };
 
 export const cleanName = (q: string) => q.replace(/[^\p{L}\p{N} '.-]/gu, '').trim().slice(0, 60);
 
