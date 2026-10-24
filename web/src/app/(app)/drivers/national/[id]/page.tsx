@@ -39,7 +39,7 @@ export default async function NationalDriver({ params }: { params: Promise<{ id:
   try { file = await nationalFile(id); } catch (e) { error = e instanceof Error ? e.message : 'Unable to open this driver.'; }
   return (
     <>
-      <PageHeader title={file?.full_name ?? 'National driver database'} subtitle={file ? `Born ${file.date_of_birth ? day(file.date_of_birth) : '—'} · Currently with ${file.fleet_name}` : 'Driver history'}
+      <PageHeader title={file?.full_name ?? 'National driver database'} subtitle={file ? `Born ${file.date_of_birth ? day(file.date_of_birth) : '—'} · ${file.fleet_name ? `Currently with ${file.fleet_name}` : "Not currently with a customer"}` : 'Driver history'}
         actions={<Link prefetch={false} className="button-link" href="/drivers/national">← Search</Link>} />
       {error && <Notice alert>{error}</Notice>}
       {file && (

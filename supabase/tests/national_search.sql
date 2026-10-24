@@ -26,6 +26,12 @@ begin
   -- the insurer cannot read the driver's rows directly
   -- audit trail written
   reset role;
+  -- a driver switched off everywhere is still found (no current customer) and can still withdraw
+  update public.driver_consents set recorded_at = now() - interval '1 minute' where user_id = D and kind = 'national_database';
+  update public.memberships set active = false where user_id = D and role = 'driver';
+  perform set_config('request.jwt.claims', json_build_object('sub', I, 'role', 'authenticated')::text, true); set local role authenticated;
+  r := public.search_national_drivers(nm); n := n + 1; if jsonb_array_length(r) < 1 or r->0->>'fleet_name' is not null then raise exception 'T6b former driver wrong: %', r; end if;
+  reset role;
   select count(*) > 0 into ok from public.audit_logs where action = 'driver.national_search' and actor_id = I; n := n + 1; if not ok then raise exception 'T7 search not audited'; end if;
   select count(*) > 0 into ok from public.audit_logs where action = 'driver.national_viewed' and actor_id = I and entity_id = D; n := n + 1; if not ok then raise exception 'T8 view not audited'; end if;
   -- driver withdraws: gone at once

@@ -41,7 +41,7 @@ export default async function NationalSearch({ searchParams }: { searchParams: P
               <tr key={r.user_id}>
                 <td><strong>{r.full_name}</strong></td>
                 <td>{r.date_of_birth ? new Date(r.date_of_birth + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' }) : r.birth_year ?? '—'}</td>
-                <td>{r.fleet_name}</td>
+                <td>{r.fleet_name ?? <span className="muted">No current customer</span>}</td>
                 <td><Link prefetch={false} className="textbtn" href={'/drivers/national/' + r.user_id}>Open history</Link></td>
               </tr>
             ))}</tbody>
