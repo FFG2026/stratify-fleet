@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, getClaim } from '@/lib/claims-data';
+import { claimSide, getClaim, getCoverRecord } from '@/lib/claims-data';
 import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
@@ -34,9 +34,11 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const canParty = open && (side === 'fleet' || (side === 'driver' && status === 'reported'));
   const openRequests = requests.filter(r => !r.answered_at && !r.cancelled_at);
   const fleetName = orgName(ctx, c.fleet_id);
+  const cover = await getCoverRecord(c.vehicle_id, c.incident_at).catch(() => null);
   return (
     <>
       <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<LinkButton href="/claims">← Claims</LinkButton>} />
+      {cover?.after && side !== 'driver' && <Notice alert><strong>Cover was recorded after the incident.</strong> {cover.startedAt ? `This vehicle's cover was added to the portal on ${londonDateTime(cover.recordedAt)}, after the incident at ${londonDateTime(c.incident_at)}.` : `This vehicle had no cover in the portal at the time of the incident. It was added later, on ${londonDateTime(cover.recordedAt)}.`} The insurer decides whether the claim is accepted.</Notice>}
       {sp.upload === 'failed' && <Notice alert>Your claim was saved, but some photos could not be uploaded. Add them below.</Notice>}
       <div className="claim-status">
         <Badge warn={open}>{statusLabel[status] ?? status}</Badge>
@@ -87,6 +89,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
           <div><dt>Police attended</dt><dd>{yn(c.police_attended)}{c.police_reference ? ` · ${c.police_reference}` : ''}</dd></div>
           <div><dt>Vehicle can be driven</dt><dd>{yn(c.vehicle_driveable)}</dd></div>
           <div><dt>Other party involved</dt><dd>{yn(c.third_party_involved)}</dd></div>
+          {cover && side !== 'driver' && <div><dt>Cover added to the portal</dt><dd>{londonDateTime(cover.recordedAt)}{cover.after ? ' · after the incident' : ''}</dd></div>}
           {c.on_cover_at_incident !== null && <div><dt>Vehicle register at that time</dt><dd>{c.on_cover_at_incident ? `On cover${policy ? ' · ' + policy.reference : ''}` : 'Not on cover'}</dd></div>}
         </dl>
         <h3>Description</h3>

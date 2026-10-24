@@ -33,7 +33,7 @@ const periods = [];
 for (const [fleet, policy, prefix, n] of [[ids.f1, ids.p1, 'AB', 30], [ids.f2, ids.p2, 'CD', 5], [ids.f3, ids.p3, 'EF', 4]]) {
   for (let i = 0; i < n; i++) periods.push({
     id: `c${fleet.slice(1, 2)}000000-0000-4000-8000-${String(i).padStart(12, '0')}`, vehicle_id: `d${fleet.slice(1, 2)}000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-    fleet_id: fleet, policy_id: policy, cover_start: '2026-01-01T09:00:00Z', cover_end: i % 10 === 9 ? '2026-03-17T17:00:00Z' : null, voided_at: null,
+    fleet_id: fleet, policy_id: policy, cover_start: '2026-01-01T09:00:00Z', created_at: '2026-01-01T09:00:05Z', cover_end: i % 10 === 9 ? '2026-03-17T17:00:00Z' : null, voided_at: null,
     vehicle: { registration: `${prefix}${String(10 + i)}XYZ`, make_model: 'Example Van ' + i }
   });
 }
@@ -141,7 +141,7 @@ export function startFake(port) {
     const mine = r => (u.role === 'driver' ? r.user_id === u.id : sees(r.fleet_id));
     if (path === 'driver_profiles') {
       const name = (q.get('full_name') || '').replace('ilike.', '').replaceAll('*', '').toLowerCase(), uid = (q.get('user_id') || '').replace('eq.', '');
-      return page(profiles.filter(r => mine(r) && (!name || r.full_name.toLowerCase().includes(name)) && (!uid || r.user_id === uid) && (!q.get('fleet_id') || r.fleet_id === q.get('fleet_id').replace('eq.', ''))));
+      return page(profiles.filter(r => mine(r) && (!name || r.full_name.toLowerCase().includes(name)) && (!uid || r.user_id === uid || (uid.startsWith('in.') && uid.includes(r.user_id))) && (!q.get('fleet_id') || r.fleet_id === q.get('fleet_id').replace('eq.', ''))));
     }
     if (path === 'driver_documents') {
       const docs = [
@@ -160,6 +160,7 @@ export function startFake(port) {
       { id: 'r1000000-0000-4000-8000-000000000002', user_id: driverId, fleet_id: ids.f1, kind: 'claim', title: 'Rear-end collision', detail: null, start_date: '2025-02-01', end_date: null, amount: 1250, at_fault: false, points: null }
     ].filter(r => mine(r) && (!(q.get('user_id') || '').startsWith('eq.') || r.user_id === q.get('user_id').slice(3))));
     if (path === 'vehicles') return json(200, (q.get('registration') || '') === 'eq.AB10XYZ' ? [{ id: 'f1000000-0000-4000-8000-000000000001' }] : []);
+    if (path === 'vehicle_assignments' && (q.get('assigned_from') || '').startsWith('lte.')) return json(200, [{ vehicle_id: periods.find(p => p.fleet_id === ids.f1).vehicle_id, user_id: users['driver@example.test'].id, assigned_from: '2026-01-01' }]);
     if (path === 'vehicle_assignments') return json(200, [{ id: 'e0000000-0000-4000-8000-000000000001', user_id: users['driver@example.test'].id, vehicle_id: 'v1', assigned_from: '2026-01-01', assigned_to: null, vehicle: { registration: 'AB10XYZ', make_model: 'Ford Transit' } }]);
     if (path === 'organisations') return page(allOrgs.filter(o => sees(o.id)));
     if (path === 'policies') {

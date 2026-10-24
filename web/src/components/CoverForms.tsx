@@ -44,6 +44,7 @@ export function AddVehicleForm({ policies, today, allowed }: { policies: PolicyO
         <label>Model<input name="model" maxLength={100} required placeholder="e.g. Transit Custom" /></label>
       </div>
       <div className="form-note" role="status" aria-live="polite">{lookupNote}</div>
+      <div className="form-note"><strong>Cover starts from the moment you press the button.</strong> Choosing today starts cover now, not at midnight. A later date starts at the beginning of that day. Cover cannot be backdated, and the exact time each vehicle was added is recorded permanently.</div>
       <div className="form-note">This records a coverage instruction in the development workspace. Insurance and MID workflows require insurer approval before production use.</div>
       <button className="primary" disabled={!allowed || pending}>{pending ? 'Recording…' : 'Record addition'}</button>
       <div role="status" aria-live="polite" className="form-note">{result?.message}</div>
@@ -100,7 +101,7 @@ export function RemoveVehicleForm({ today, allowed, policyId = '', initialQuery 
         </div>
       )}
       <label>First date without cover<input type="date" name="ends_on" min={today} required /></label>
-      <div className="form-note">The removal date is excluded from insured days. Closing a period preserves its history. Re-adding a vehicle creates a new period.</div>
+      <div className="form-note">Choosing today ends cover from the moment you press the button. Cover cannot end earlier than the time it is recorded. The removal date is excluded from insured days. Closing a period preserves its history. Re-adding a vehicle creates a new period.</div>
       <button disabled={!allowed || pending || !chosen}>{pending ? 'Recording…' : 'Record removal'}</button>
       <div role="status" aria-live="polite" className="form-note">{result?.message}</div>
     </form>
