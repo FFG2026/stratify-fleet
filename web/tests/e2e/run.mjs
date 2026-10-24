@@ -450,6 +450,40 @@ try {
     check('Rates navigation is hidden from a customer', await page.locator('nav a:has-text("Rates")').count() === 0);
     await context.close(); }
 
+  // ---- password reset and two-step sign-in
+  { const c = await browser.newContext(); const p = await c.newPage();
+    p.on('pageerror', e => problems.push('pageerror ' + e.message));
+    await go(p, base + '/login'); check('login page offers a forgot-password link', await p.locator('a[href="/forgot-password"]').count() === 1);
+    await p.click('a[href="/forgot-password"]'); await p.waitForURL('**/forgot-password'); await p.waitForLoadState('networkidle');
+    await p.fill('input[name=email]', 'someone@example.test'); await p.click('button:has-text("Email me a reset link")'); await p.waitForSelector('text=If that address has an account');
+    const rc = (await calls()).find(x => x.auth === 'recover');
+    check('reset request reaches the auth service with a callback to this site', rc && rc.email === 'someone@example.test' && /\/auth\/callback\?next=\/reset-password$/.test(rc.redirect || ''), JSON.stringify(rc));
+    await go(p, base + '/forgot-password'); await p.fill('input[name=email]', 'demo@stratifyfleet.co.uk'); await p.click('button:has-text("Email me a reset link")'); await p.waitForSelector('text=If that address has an account');
+    check('the answer is identical for the demo account and nothing is sent for it', (await calls()).filter(x => x.auth === 'recover').length === 1);
+    await go(p, base + '/auth/callback?token_hash=bogus&type=recovery&next=//evil.example'); await p.waitForURL('**/forgot-password?expired=1');
+    check('an invalid or used reset link lands on a clear message, never an off-site address', (await text(p)).includes('expired') && !p.url().includes('evil.example'), p.url());
+    await go(p, base + '/reset-password'); check('the reset page needs a session from the emailed link', ['/login', '/forgot-password'].includes(new URL(p.url()).pathname), p.url());
+    await c.close(); }
+  { const c = await browser.newContext(); const p = await c.newPage();
+    await go(p, base + '/login'); await p.fill('input[name=email]', 'mfa@example.test'); await p.fill('input[name=password]', 'pw'); await p.click('button.primary');
+    await p.waitForURL('**/mfa'); check('someone with two-step sign-in is asked for a code straight after the password', true);
+    await go(p, base + '/fleet'); check('they cannot reach the workspace without the code', new URL(p.url()).pathname === '/mfa', p.url());
+    await p.fill('input[name=code]', '000000'); await p.click('button:has-text("Continue")'); await p.waitForSelector('text=That code did not work');
+    await p.fill('input[name=code]', '123456'); await p.click('button:has-text("Continue")'); await p.waitForURL(u => u.pathname !== '/mfa');
+    await go(p, base + '/fleet'); check('the right code opens the workspace', new URL(p.url()).pathname === '/fleet', p.url());
+    await c.close(); }
+  { const { context, page } = await session('enrol@example.test');
+    await go(page, base + '/security'); let t = await text(page);
+    check('security page shows two-step sign-in is off with a set-up button', t.includes('Two-step sign-in is off') && t.includes('Set up two-step sign-in'), t.slice(-300));
+    await page.click('button:has-text("Set up two-step sign-in")'); await page.waitForSelector('img[alt^="Set-up code"]');
+    check('set-up shows a scannable code and a typed key', (await text(page)).includes('JBSWY3DPEHPK3PXP'));
+    await page.fill('input[name=code]', '000000'); await page.click('button:has-text("Turn on")'); await page.waitForSelector('text=That code did not work');
+    await page.fill('input[name=code]', '123456'); await page.click('button:has-text("Turn on")'); await page.waitForSelector('text=is on');
+    check('a correct code turns two-step sign-in on', (await calls()).some(x => x.auth === 'verified' && x.as === 'enrol@example.test'));
+    await page.click('button:has-text("Turn off two-step sign-in")'); await page.waitForSelector('text=Two-step sign-in is off');
+    check('it can be turned off again', (await calls()).some(x => x.auth === 'unenrol'));
+    await context.close(); }
+
   // ---- mobile
   { const { context, page } = await session('platform@example.test', { width: 390, height: 800 });
     await go(page, base + '/fleet');

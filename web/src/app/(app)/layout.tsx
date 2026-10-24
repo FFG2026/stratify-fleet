@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { adminRoles, mfaRequiredForAdmins } from '@/lib/mfa';
 import { Suspense } from 'react';
-import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, orgName } from '@/lib/data';
+import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, rolesOf, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -31,6 +33,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   if (ctx.user.mustChangePassword) redirect('/change-password');
+  if (mfaRequiredForAdmins() && !ctx.demo && rolesOf(ctx).some(r => adminRoles.includes(r))) {
+    const { data } = await (await createClient()).auth.getUser();
+    if (!(data.user?.factors ?? []).some(f => f.status === 'verified')) redirect('/security?required=1');
+  }
   const driver = isDriverOnly(ctx);
   const driverNav: NavItem[] = [
     { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
@@ -55,6 +61,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Badge warn>{ctx.demo ? 'DEMO · READ-ONLY' : 'DEVELOPMENT'}</Badge>
             <span className="avatar">{initials}</span>
             <span className="email">{ctx.user.email}</span>
+            {!ctx.demo && <a className="textbtn" href="/security">Security</a>}
             <form action={signOut}><button>{ctx.demo ? 'Exit demo' : 'Sign out'}</button></form>
           </div>
         </header>

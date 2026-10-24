@@ -264,3 +264,15 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - `driver_fleet()` now picks deterministically (oldest active driver membership).
 - Known limits: retired document files remain in storage (unreachable by staff; delete them when a retention rule is agreed). Old-customer records are retained, not deleted — retention periods need a legal decision.
 - Tests: `supabase/tests/driver_integrity.sql` (13 checks), `national_search.sql` updated (11 checks).
+
+## Password reset and two-step sign-in (hole D)
+- **Forgot password**: `/forgot-password` (link on the sign-in page) emails a reset link; the answer is identical whether or not the address has an account, and nothing is sent for the demo account. The link lands on `/auth/callback` (accepts both a `code` and a `token_hash` link), which signs the person in and sends them to `/reset-password`. An expired or used link goes to a clear "request a new one" page; the `next` address can never leave the site (unit-tested).
+- **Two-step sign-in (authenticator app)**: people turn it on at `/security` (Security link in the top bar). Afterwards sign-in goes password → `/mfa` code. It is enforced in the database too (`private.mfa_ok()` in `require_user()` and `accessible_orgs()`): a session that has not passed the second step gets no organisation data and cannot run any function, even if someone calls the API directly. People without it are unaffected. Tests: `supabase/tests/mfa.sql` (6 checks); e2e 159/159.
+- **Optional enforcement for administrators**: set `REQUIRE_MFA_FOR_ADMINS=true` and platform, insurer and customer administrators are sent to `/security` until they have set it up (and cannot turn it off). Left OFF by default so nobody is locked out.
+- **Needs Owen (Supabase dashboard / Vercel), cannot be done from code:**
+  1. Authentication → URL configuration: set the Site URL to the live address and add `<live address>/auth/callback` to the Redirect URLs allow-list; also set `SITE_URL` in Vercel to the live address.
+  2. Authentication → SMTP: set up a real email sender. Supabase's built-in sender is for testing only (very low limit, may not deliver to outside addresses), so reset emails will be unreliable until this is done.
+  3. Authentication → Email templates → "Reset password": no change needed for the default link to work.
+  4. Authentication → Providers → Email → enable "Leaked password protection" (a paid-plan feature).
+  5. Multi-factor must be enabled for TOTP (Authentication → Multi-factor, normally on by default).
+- **Lost phone**: there are no recovery codes yet. An administrator at Supabase (Authentication → Users) has to remove the person's factor. A recovery-code feature is a sensible next step before requiring this for all administrators.
