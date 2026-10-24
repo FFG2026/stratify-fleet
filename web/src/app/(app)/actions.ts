@@ -9,6 +9,7 @@ import { londonDate, londonMidnight, monthBounds, normaliseRegistration, parseDa
 import { checkedId } from '@/lib/ids';
 import { getFleetPage } from '@/lib/data';
 import { memberEmail, memberRole } from '@/lib/members';
+import { createLogin } from '@/lib/admin-auth';
 import { createLimiter, lookupVehicle, type VehicleSummary } from '@/lib/vehicle-lookup';
 import type { ActionResult } from '@/components/useAction';
 
@@ -114,12 +115,26 @@ export async function generateReport(form: FormData): Promise<ActionResult> {
 }
 
 // ---- people
+const passwordSchema = z.string().min(12, 'The temporary password must be at least 12 characters.').max(72, 'The temporary password is too long (72 characters at most).');
+
 export async function addMember(form: FormData): Promise<ActionResult> {
   await requireContext();
   try {
-    const result = await rpc<string>('add_member', { p_org: checkedId(form.get('org')), p_email: memberEmail(form.get('email')), p_role: memberRole(form.get('role')) });
+    const org = checkedId(form.get('org')), email = memberEmail(form.get('email')), role = memberRole(form.get('role'));
+    const rawPassword = String(form.get('password') ?? '');
+    const password = rawPassword ? passwordSchema.parse(rawPassword) : '';
+    if (password && password.toLowerCase().includes(email.split('@')[0])) return { ok: false, message: 'The temporary password must not contain the email name.' };
+    // The database checks permission, role and organisation first; nothing is created in Supabase Auth unless that passes.
+    const result = await rpc<string>('add_member', { p_org: org, p_email: email, p_role: role });
     revalidatePath('/users');
-    return done(result === 'added' ? 'Added. They have access now.' : 'Invitation saved. It applies when they first sign in.');
+    if (result === 'added') return done('Added. They already had a login, so their existing password still works.');
+    if (!password) return done('Invitation saved. It applies when they first sign in.');
+    try { await createLogin(email, password); }
+    catch (error) {
+      return { ok: false, message: (error instanceof Error ? error.message : 'Unable to create the login.') + ' The invitation is saved; cancel it or try again with a password.' };
+    }
+    await rpc('record_member_login', { p_org: org, p_email: email }).catch(() => null);
+    return done('Login created. Give them the temporary password; they must choose their own at first sign-in.');
   } catch (error) { return fail(error); }
 }
 export async function changeMemberRole(form: FormData): Promise<ActionResult> {

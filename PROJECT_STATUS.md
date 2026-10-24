@@ -151,3 +151,10 @@ Built alongside the live portal; **nothing deployed and the live site is untouch
 - Rollback if needed: Vercel > Deployments > promote the PR #4 deployment (17aa29c). Note that promoting stops new deployments taking the domain automatically until the latest one is promoted.
 - Extra project `stratify-web` (same repo, Root Directory `web`) was created for testing and can be deleted. Temporary branch `debug/vercel-404` can be deleted.
 - Not yet verified on the live domain: sign-in with the real platform, insurer and customer logins. Supabase Auth Site URL / redirect URLs still need confirming as https://www.stratifyfleet.co.uk. DVLA lookup stays off until DVLA_VES_API_KEY is set.
+
+## Logins with a temporary password (24 Oct 2026)
+- Users page: an administrator can type a temporary password (12+ characters) when adding someone who has no login yet. The portal runs `add_member` first (permission, role and organisation checks in the database), then creates the Supabase Auth login (email confirmed, `app_metadata.must_change_password = true`) and records `member.login_created` in the audit trail via `record_member_login`. The password is never stored, logged or shown back.
+- First sign-in sends the person to /change-password; the rest of the app and all server actions are closed until they choose their own password. The flag lives in `app_metadata`, which people cannot edit themselves; it is cleared server-side only after Supabase accepts the new password.
+- Needs `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel variable. Without it the password field reports that login creation is not set up; the invite-only path still works. The key is read only in `web/src/lib/admin-auth.ts` (server-only) and is never sent to the browser.
+- Supabase "leaked password protection" is off on the dev project (advisor warning); enable it under Auth settings (Pro plan feature).
+- Migration `20261024070000_member_login_audit.sql` applied to the dev project.

@@ -6,6 +6,7 @@ import type { Context } from '@/lib/types';
 export async function requireContext(): Promise<Context> {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (ctx.user.mustChangePassword) redirect('/change-password');
   return ctx;
 }
 export function messageOf(error: unknown): string {

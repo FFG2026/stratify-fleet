@@ -35,7 +35,7 @@ export const getContext = cache(async (): Promise<Context | null> => {
     allRows<OrgRow>('organisations'), allRows<PolicyRow>('policies'),
     rest<Membership[]>(`/rest/v1/memberships?select=organisation_id,role,active&user_id=eq.${user.id}`)
   ]);
-  return { user: { id: user.id, email }, demo: false, orgs: orgs.map(normaliseOrg), policies: policies.map(normalisePolicy), memberships };
+  return { user: { id: user.id, email, mustChangePassword: user.app_metadata?.must_change_password === true }, demo: false, orgs: orgs.map(normaliseOrg), policies: policies.map(normalisePolicy), memberships };
 });
 
 export const rolesOf = (ctx: Context) => ctx.memberships.filter(m => m.active).map(m => m.role);
