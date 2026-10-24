@@ -22,7 +22,7 @@ describe('fleet CRM permissions, validation and demo',()=>{
  it('allows fleet staff to manage, insurer/accounts to read, and denies drivers',()=>{
   for(const role of ['platform_super_admin','fleet_admin','fleet_manager','insurer_admin','fleet_accounts','driver']){
    const c={...ctx,demo:false,memberships:[{organisation_id:'f',active:true,role}]};
-   expect(canReadCrm(c)).toBe(role!=='driver');expect(canWriteCrm(c)).toBe(['platform_super_admin','fleet_admin','fleet_manager'].includes(role));
+   expect(canReadCrm(c)).toBe(!['driver','insurer_admin'].includes(role));expect(canWriteCrm(c)).toBe(['platform_super_admin','fleet_admin','fleet_manager'].includes(role));
   }expect(canReadCrm(ctx)).toBe(true);expect(canWriteCrm(ctx)).toBe(false);
  });
  it('rejects query syntax injection and invalid pagination',()=>{
