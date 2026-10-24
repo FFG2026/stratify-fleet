@@ -42,6 +42,11 @@ export function londonMidnight(value: string): string {
   const offset = parts.find(p => p.type === 'timeZoneName')?.value === 'GMT+1' ? 3600000 : 0;
   return new Date(timestamp - offset).toISOString();
 }
+// The moment a cover change takes effect. "Today" means from the moment it is recorded, never from midnight, so cover cannot be
+// recorded back to the start of a day that has already begun. A later date starts at midnight London time.
+export function effectiveFrom(value: string, now = new Date()): string {
+  return value === londonDate(now) ? now.toISOString() : londonMidnight(value);
+}
 export function nextDate(value: string): string { return new Date(parseDate(value) + day).toISOString().slice(0, 10); }
 export const londonDateTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { timeZone: 'Europe/London' });
 export const londonShortDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { timeZone: 'Europe/London' });

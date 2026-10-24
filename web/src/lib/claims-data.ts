@@ -57,6 +57,19 @@ export async function getClaim(id: string) {
   ]);
   return claims[0] ? { claim: claims[0], parties, events, requests, files } : null;
 }
+// When the portal recorded the cover that applied at the time of the incident. A vehicle added after the incident is flagged
+// to the people reading the claim. This is information from the portal's own records, not a decision about cover.
+export type CoverRecord = { startedAt: string; recordedAt: string; after: boolean } | { startedAt: null; recordedAt: string; after: true } | null;
+export async function getCoverRecord(vehicleId: string | null, incidentAt: string): Promise<CoverRecord> {
+  if (!vehicleId) return null;
+  const rows = await rest<{ cover_start: string; cover_end: string | null; created_at: string }[]>('/rest/v1/coverage_periods?' + new URLSearchParams({
+    select: 'cover_start,cover_end,created_at', vehicle_id: 'eq.' + checkedId(vehicleId), voided_at: 'is.null', order: 'cover_start.asc', limit: '50' }));
+  const at = Date.parse(incidentAt);
+  const inForce = rows.find(r => Date.parse(r.cover_start) <= at && (!r.cover_end || Date.parse(r.cover_end) > at));
+  if (inForce) return { startedAt: inForce.cover_start, recordedAt: inForce.created_at, after: Date.parse(inForce.created_at) > at };
+  const later = rows.find(r => Date.parse(r.cover_start) > at);
+  return later ? { startedAt: null, recordedAt: later.created_at, after: true } : null;
+}
 export async function getClaimBasic(id: string) {
   const rows = await rest<Pick<ClaimRow, 'id' | 'fleet_id' | 'status'>[]>('/rest/v1/claims?select=id,fleet_id,status&id=eq.' + checkedId(id));
   return rows[0] ?? null;

@@ -105,7 +105,11 @@ try {
     await page.fill('input[name=registration]', 'ZZ11AAA'); await page.fill('input[name=make]', 'Ford'); await page.fill('input[name=model]', 'X');
     await page.evaluate(() => { document.querySelector('input[name=starts_on]').removeAttribute('min'); });
     await page.fill('input[name=starts_on]', '2026-01-02'); await page.click('button:has-text("Record addition")');
-    await page.waitForSelector('text=Backdating approval is not available'); check('backdated additions are refused by the portal', true);
+    await page.waitForSelector('text=Cover cannot be backdated'); check('backdated additions are refused by the portal', true);
+    await page.fill('input[name=registration]', 'ZZ12AAA'); await page.fill('input[name=starts_on]', new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' })); await page.click('button:has-text("Record addition")');
+    await page.waitForSelector('text=Coverage change recorded');
+    { const c = (await calls()).filter(x => x.rpc === 'add_vehicle_cover').pop(); const eff = Date.parse(c.body.p_effective_at);
+      check('adding a vehicle "from today" starts cover from the moment it is recorded, not midnight', c.body.p_registration === 'ZZ12AAA' && Math.abs(Date.now() - eff) < 120000, c.body.p_effective_at); }
 
     // remove vehicle
     await page.click('a[role=tab]:has-text("Remove vehicle")'); await urlHas(page, /mode=remove/);
@@ -367,6 +371,24 @@ try {
     check('a driver sees the optional national database choice, unticked and separate', t.includes('National driver database (optional)') && !(await page.locator('input[aria-label="National driver database (optional)"]').isChecked()));
     await page.locator('input[aria-label="National driver database (optional)"]').click(); await page.waitForSelector('text=Permission recorded');
     check('ticking it records a separate national_database consent with the wording', (await calls()).some(c => c.rpc === 'record_driver_consent' && c.body.p_kind === 'national_database' && c.body.p_given === true && /national driver database/.test(c.body.p_statement)));
+    await context.close(); }
+
+  // ---- fleet dashboard: unassigned vehicles box, reports, timestamps
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + '/customer'); let t = await text(page);
+    check('the fleet dashboard has a Vehicles without a driver box with downloads', t.includes('Vehicles without a driver') && /\d+ of \d+/.test(t) && t.includes('Download unassigned vehicles'), t.slice(0, 600));
+    const un = await page.evaluate(async () => { const r = await fetch('/customer/report?scope=unassigned'); return { type: r.headers.get('content-type'), disp: r.headers.get('content-disposition'), body: await r.text() }; });
+    check('the unassigned report is a CSV with the added-to-portal time and only unassigned vehicles', /text\/csv/.test(un.type) && /attachment/.test(un.disp) && un.body.includes('Added to portal (UK time)') && un.body.includes('UNASSIGNED') && !un.body.includes('Dana Driver') && /01\/01\/2026, 09:00:05/.test(un.body), un.body.slice(0, 400));
+    const all = await page.evaluate(async () => (await (await fetch('/customer/report?scope=all')).text()));
+    check('the full report names the assigned driver', all.includes('Dana Driver') && all.includes('UNASSIGNED'), all.split('\r\n').filter(l => /AB10/.test(l)).join(' | ').slice(0, 400));
+    await go(page, base + '/fleet'); t = await text(page);
+    check('the vehicle register shows when each vehicle was added to the portal', t.includes('ADDED TO PORTAL') && /01\/01\/2026, 09:00:05/.test(t), t.slice(0, 400));
+    await go(page, base + '/changes'); t = await text(page);
+    check('the add-vehicle form says cover starts from the moment of recording and cannot be backdated', /moment you press the button/.test(t) && /cannot be backdated/.test(t), t.slice(0, 500));
+    await context.close(); }
+  { const { context, page } = await session('driver@example.test');
+    const r = await page.evaluate(async () => (await fetch('/customer/report?scope=all')).status);
+    check('a driver cannot download the fleet report', r === 404 || r === 200 && false, String(r));
     await context.close(); }
 
   // ---- account with no membership

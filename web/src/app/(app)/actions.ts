@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { rest, rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
-import { londonDate, londonMidnight, monthBounds, normaliseRegistration, parseDate } from '@/lib/dates';
+import { londonDate, effectiveFrom, monthBounds, normaliseRegistration, parseDate } from '@/lib/dates';
 import { checkedId } from '@/lib/ids';
 import { getFleetPage } from '@/lib/data';
 import { memberEmail, memberRole } from '@/lib/members';
@@ -39,12 +39,12 @@ export async function addVehicle(form: FormData): Promise<ActionResult> {
     const data = addSchema.parse(Object.fromEntries(form));
     const registration = normaliseRegistration(data.registration);
     parseDate(data.starts_on);
-    if (data.starts_on < londonDate(new Date())) return { ok: false, message: 'Backdating approval is not available in this portal yet.' };
+    if (data.starts_on < londonDate(new Date())) return { ok: false, message: 'Cover cannot be backdated. Choose today or a later date.' };
     const policies = await rest<{ id: string; fleet_id: string }[]>('/rest/v1/policies?select=id,fleet_id&id=eq.' + checkedId(data.policy_id));
     if (!policies.length) return { ok: false, message: 'Policy not accessible.' };
     await rpc('add_vehicle_cover', {
       p_fleet_id: policies[0].fleet_id, p_policy_id: data.policy_id, p_registration: registration,
-      p_make_model: `${data.make} ${data.model}`.trim().slice(0, 200), p_effective_at: londonMidnight(data.starts_on)
+      p_make_model: `${data.make} ${data.model}`.trim().slice(0, 200), p_effective_at: effectiveFrom(data.starts_on)
     });
     refresh();
     return done('Coverage change recorded and added to the audit trail.');
@@ -59,13 +59,13 @@ export async function removeVehicle(form: FormData): Promise<ActionResult> {
   try {
     const data = removeSchema.parse(Object.fromEntries(form));
     parseDate(data.ends_on);
-    if (data.ends_on < londonDate(new Date())) return { ok: false, message: 'Backdating approval is not available in this portal yet.' };
+    if (data.ends_on < londonDate(new Date())) return { ok: false, message: 'Cover cannot be backdated. Choose today or a later date.' };
     const periods = await rest<{ vehicle_id: string; cover_start: string; cover_end: string | null; voided_at: string | null }[]>('/rest/v1/coverage_periods?select=*&id=eq.' + data.period_id);
     if (!periods.length) return { ok: false, message: 'Coverage period not accessible.' };
     const p = periods[0];
     if (p.cover_end || p.voided_at) return { ok: false, message: 'This period is already closed or voided.' };
     if (data.ends_on <= londonDate(p.cover_start)) return { ok: false, message: 'Removal must be on a later calendar date.' };
-    await rpc('remove_vehicle_cover', { p_vehicle_id: p.vehicle_id, p_effective_at: londonMidnight(data.ends_on) });
+    await rpc('remove_vehicle_cover', { p_vehicle_id: p.vehicle_id, p_effective_at: effectiveFrom(data.ends_on) });
     refresh();
     return done('Coverage change recorded and added to the audit trail.');
   } catch (error) { return fail(error); }

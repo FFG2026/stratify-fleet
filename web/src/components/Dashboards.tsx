@@ -81,8 +81,8 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
   );
 }
 
-export function StaticDashboard({ ctx, summary, showOrgNote, fleetView = false }: {
-  ctx: Context; showOrgNote: boolean; fleetView?: boolean;
+export function StaticDashboard({ ctx, summary, showOrgNote, fleetView = false, unassigned }: {
+  ctx: Context; showOrgNote: boolean; fleetView?: boolean; unassigned?: { covered: number; without: number } | null;
   summary: { periods: number; covered: number; scheduled: number; recent: Period[]; events: { id: string | number; registration: string; action: string; created_at: string }[] };
 }) {
   const customers = ctx.orgs.filter(o => o.kind === 'customer');
@@ -98,6 +98,17 @@ export function StaticDashboard({ ctx, summary, showOrgNote, fleetView = false }
         ['Policies', ctx.policies.length, 'Authorised policy records', '#portfolio'],
         ['Coverage periods', summary.periods, 'Historical and current records', '/fleet']
       ]} />
+      {fleetView && unassigned && (
+        <section className="panel"><div className="panel-body">
+          <div className="cardhead"><h2>Vehicles without a driver</h2><Badge warn={unassigned.without > 0}>{unassigned.without} of {unassigned.covered}</Badge></div>
+          <p className="subtext">{unassigned.without === 0 ? 'Every vehicle on cover today has a driver assigned.' : `${unassigned.without} of your ${unassigned.covered} vehicles on cover today ${unassigned.without === 1 ? 'has' : 'have'} no driver assigned.`} The reports list each vehicle with the exact date and time it was added to the portal.</p>
+          <div className="actions">
+            <a className="button-link primary" href="/customer/report?scope=unassigned" download>Download unassigned vehicles (CSV)</a>
+            <a className="button-link" href="/customer/report?scope=all" download>Download all vehicles and drivers (CSV)</a>
+            <Link prefetch={false} className="button-link" href="/drivers?view=assignments">Assign drivers →</Link>
+          </div>
+        </div></section>
+      )}
       <div className="grid-two">
         <div className="panel">
           <div className="panel-header"><h2>Coverage activity</h2><Link prefetch={false} className="textbtn" href="/changes">Manage cover →</Link></div>

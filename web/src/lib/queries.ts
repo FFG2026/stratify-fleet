@@ -12,7 +12,7 @@ export function pageOptions(params: Params) {
 export function fleetQuery(params: Params, now = new Date()) {
   const { offset, limit } = pageOptions(params);
   const query = new URLSearchParams({
-    select: 'id,vehicle_id,fleet_id,policy_id,cover_start,cover_end,voided_at,vehicle:vehicles!inner(registration,make_model),policy:policies!inner(valid_to,active)',
+    select: 'id,vehicle_id,fleet_id,policy_id,cover_start,cover_end,created_at,voided_at,vehicle:vehicles!inner(registration,make_model),policy:policies!inner(valid_to,active)',
     voided_at: 'is.null', order: 'cover_start.desc,id.asc', offset: String(offset), limit: String(limit)
   });
   if (params.policy) query.set('policy_id', 'eq.' + checkedId(params.policy));

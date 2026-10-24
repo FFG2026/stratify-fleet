@@ -4,7 +4,7 @@ export type Policy = { id: string; reference: string; customer_id: string; insur
 export type Membership = { organisation_id: string; role: string; active: boolean };
 export type Period = {
   id: string; vehicle_id?: string; policy_id: string; registration: string; make: string; model: string;
-  starts_on: string; ends_on: string | null; voided_at?: string | null;
+  starts_on: string; ends_on: string | null; voided_at?: string | null; recorded_at?: string;
 };
 export type Page<T> = { rows: T[]; total: number; offset: number; limit: number };
 export type Context = {

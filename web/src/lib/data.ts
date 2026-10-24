@@ -10,7 +10,7 @@ import type { Context, FleetOverviewRow, Member, Membership, Org, Page, Period, 
 
 type OrgRow = { id: string; name: string; kind: string; insurer_id: string | null };
 type PolicyRow = { id: string; policy_number: string; fleet_id: string; insurer_id: string; valid_from: string; valid_to: string | null };
-type PeriodRow = { id: string; vehicle_id: string; policy_id: string; cover_start: string; cover_end: string | null; voided_at: string | null; vehicle?: { registration: string; make_model: string | null } };
+type PeriodRow = { id: string; vehicle_id: string; policy_id: string; cover_start: string; cover_end: string | null; created_at?: string; voided_at: string | null; vehicle?: { registration: string; make_model: string | null } };
 
 export const normaliseOrg = (o: OrgRow): Org => ({ id: o.id, name: o.name, kind: o.kind === 'fleet' ? 'customer' : (o.kind as Org['kind']), insurer_id: o.insurer_id });
 export const normalisePolicy = (p: PolicyRow): Policy => ({
@@ -19,7 +19,7 @@ export const normalisePolicy = (p: PolicyRow): Policy => ({
 });
 export const normalisePeriod = (c: PeriodRow): Period => ({
   id: c.id, vehicle_id: c.vehicle_id, policy_id: c.policy_id, registration: c.vehicle?.registration || 'Unknown',
-  make: c.vehicle?.make_model || '', model: '', starts_on: londonDate(c.cover_start), ends_on: c.cover_end ? londonDate(c.cover_end) : null
+  make: c.vehicle?.make_model || '', model: '', starts_on: londonDate(c.cover_start), ends_on: c.cover_end ? londonDate(c.cover_end) : null, recorded_at: c.created_at
 });
 
 // Signed-in person, their organisations, policies and memberships. Cached for the duration of one request.
@@ -84,6 +84,30 @@ export async function getSummary(ctx: Context) {
   ]);
   void ctx;
   return { periods: total, covered, scheduled, recent: recentRows.filter(r => !r.voided_at).map(normalisePeriod), events };
+}
+
+// ---- vehicles on cover now and who (if anyone) is assigned to each
+export type CoveredVehicle = { registration: string; vehicle: string; policy: string; fleet_id: string; cover_start: string; recorded_at: string; drivers: { name: string; since: string }[] };
+export async function getCoveredVehicles(ctx: Context): Promise<CoveredVehicle[]> {
+  const nowIso = new Date().toISOString(), day = londonDate(new Date());
+  const periods = await rest<{ vehicle_id: string; fleet_id: string; policy_id: string; cover_start: string; created_at: string; vehicle: { registration: string; make_model: string | null } }[]>('/rest/v1/coverage_periods?' + new URLSearchParams({
+    select: 'vehicle_id,fleet_id,policy_id,cover_start,created_at,vehicle:vehicles!inner(registration,make_model)', voided_at: 'is.null', cover_start: 'lte.' + nowIso,
+    or: `(cover_end.is.null,cover_end.gt.${nowIso})`, order: 'created_at.desc', limit: '2000' }));
+  const assigned = await rest<{ vehicle_id: string; user_id: string; assigned_from: string }[]>('/rest/v1/vehicle_assignments?' + new URLSearchParams({
+    select: 'vehicle_id,user_id,assigned_from', assigned_from: 'lte.' + day, or: `(assigned_to.is.null,assigned_to.gte.${day})`, limit: '5000' }));
+  let names = new Map<string, string>();
+  if (assigned.length) {
+    try {
+      const ids = [...new Set(assigned.map(a => checkedId(a.user_id)))];
+      const profiles = await rest<{ user_id: string; full_name: string }[]>(`/rest/v1/driver_profiles?select=user_id,full_name&user_id=in.(${ids.join(',')})&limit=5000`);
+      names = new Map(profiles.map(p => [p.user_id, p.full_name]));
+    } catch { /* roles that cannot read driver names still see who is assigned */ }
+  }
+  return periods.map(p => ({
+    registration: p.vehicle.registration, vehicle: p.vehicle.make_model ?? '', policy: ctx.policies.find(x => x.id === p.policy_id)?.reference ?? '', fleet_id: p.fleet_id,
+    cover_start: p.cover_start, recorded_at: p.created_at,
+    drivers: assigned.filter(a => a.vehicle_id === p.vehicle_id).map(a => ({ name: names.get(a.user_id) ?? 'Assigned driver', since: a.assigned_from }))
+  }));
 }
 
 // ---- live insurer / platform dashboard
