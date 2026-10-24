@@ -11,7 +11,7 @@ export default async function Customer() {
     <>
       <PageHeader title="Fleet dashboard" subtitle="Your fleet, covered. Every change accounted for."
         actions={<><LinkButton href="/reconciliation">Open reconciliation →</LinkButton><LinkButton href="/changes" primary>＋ Add vehicle</LinkButton></>} />
-      <StaticDashboard ctx={ctx} summary={summary} showOrgNote={false} />
+      <StaticDashboard ctx={ctx} summary={summary} showOrgNote={false} fleetView />
     </>
   );
 }

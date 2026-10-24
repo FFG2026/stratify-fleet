@@ -20,9 +20,9 @@ export default async function Users({ searchParams }: { searchParams: Promise<{ 
     <>
       {header}
       <Notice><strong>Who can see what.</strong> Platform administrators see everything. Insurer users see their own customers and those customers' vehicles. Fleet users see only their own fleet. These limits are enforced by the database. You cannot change your own access, and an organisation always keeps one active administrator.</Notice>
-      <div className="filters">
+      {orgs.length > 1 && <div className="filters">
         <ParamSelect name="org" label="Organisation" value={current.id} resetParams={[]} options={orgs.map(o => ({ value: o.id, label: `${o.name} (${o.kind === 'customer' ? 'fleet customer' : o.kind})` }))} />
-      </div>
+      </div>}
       <div className="panel">
         <div className="panel-header"><h2>People in {current.name}</h2></div>
         {error && <Notice alert>{error}</Notice>}
