@@ -211,6 +211,10 @@ try {
     check('adding a job calls add_driver_record', (await calls()).some(c => c.rpc === 'add_driver_record' && c.body.p_kind === 'employment' && c.body.p_title === 'Bluebell Couriers'));
     await page.click('button[aria-label="Remove licence-front.png"]'); await page.waitForTimeout(1500);
     check('removing a file deletes it from storage', (await calls()).some(c => c.rpc === 'remove_driver_document') && (await calls()).some(c => c.storage === 'DELETE'));
+    t2 = await text(page);
+    check('the driver sees the licence check steps and past checks', t2.includes('Make a check code on gov.uk') && t2.includes('First check') && (await page.locator('a:has-text("Make a check code on gov.uk")').getAttribute('href')) === 'https://www.gov.uk/view-driving-licence' && (await page.locator('a:has-text("Make a check code on gov.uk")').getAttribute('target')) === '_blank');
+    await page.fill('input[name=code]', 'zz99 yy88'); await page.click('button:has-text("Save code")'); await page.waitForSelector('text=Code saved.');
+    check('adding a check code calls add_check_code', (await calls()).some(c => c.rpc === 'add_check_code' && c.body.p_code === 'zz99 yy88'));
     await go(page, base + '/drivers/a0000000-0000-4000-8000-000000000006'); check('a driver cannot open the staff view of a driver', new URL(page.url()).pathname === '/drivers', page.url());
     const direct = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000002'); check('a driver cannot fetch another driver\'s document', direct.status === 404, String(direct.status));
     await context.close(); }
@@ -233,6 +237,9 @@ try {
     await page.click('#driver-suggestions a:has-text("Dana Driver")'); await urlHas(page, /\/drivers\/a0000000/);
     t = await text(page);
     check('the driver detail shows details, documents, permissions and history to staff', ['Dana Driver', 'DRIVE803148DA9AB', 'licence-front.png', 'Given', 'Acme Haulage', 'Rear-end collision', 'Declared none'].every(s => t.includes(s)) && !(await page.locator('form.upload').count()), t.slice(0, 800));
+    check('staff see what to copy and a one-click link to the DVLA in a new tab', t.includes('148DA9AB') && t.includes('AB12 CD34') && (await page.locator('a:has-text("Open the DVLA check in a new tab")').getAttribute('href')) === 'https://www.viewdrivingrecord.service.gov.uk/lang/en/driving-record/validate' && (await page.locator('a:has-text("Open the DVLA check in a new tab")').getAttribute('target')) === '_blank' && /noopener/.test(await page.locator('a:has-text("Open the DVLA check in a new tab")').getAttribute('rel')), t.slice(0, 200));
+    await page.selectOption('select[name=status]', 'valid'); await page.fill('input[name=points]', '3'); await page.fill('input[name=entitlements]', 'B, BE'); await page.click('button:has-text("Record check")'); await page.waitForSelector('text=Check recorded.');
+    check('recording a check sends the result to the database', (await calls()).some(c => c.rpc === 'record_licence_check' && c.body.p_status === 'valid' && c.body.p_points === 3 && c.body.p_entitlements === 'B, BE' && /^\d{4}-\d\d-\d\d$/.test(c.body.p_next_due)));
     const doc = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000001');
     check('staff can open a driver document and it is audited first', doc.status === 200 && /image\/png/.test(doc.type || '') && (await calls()).some(c => c.rpc === 'log_driver_document_view'), String(doc.status));
     const rival = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000002'); check('staff cannot open a document from a fleet they cannot see', rival.status === 404, String(rival.status));

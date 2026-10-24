@@ -72,3 +72,14 @@ export function completeness(f: {
     { label: 'Convictions declared', done: f.convictions > 0 || !!f.profile?.no_convictions_declared_at }
   ];
 }
+
+// DVLA's own online service: an employer needs the last 8 characters of the licence number and a check code from the driver.
+// The code is made by the driver on gov.uk, works once, and lasts 21 days. The portal never calls the DVLA.
+export const dvlaCheckUrl = 'https://www.viewdrivingrecord.service.gov.uk/lang/en/driving-record/validate';
+export const dvlaShareUrl = 'https://www.gov.uk/view-driving-licence';
+export const dvlaNorthernIrelandUrl = 'https://dvaonline.nidirect.gov.uk/Customer/DataShare/CheckDrivingLicence';
+export const lastEight = (licence: string | null) => (licence ? licence.replace(/\s/g, '').slice(-8) : null);
+// A code is good for 21 days from when the driver made it. We only know when it was added, so this is the latest it can last to.
+export const codeLatestExpiry = (addedAt: string) => new Date(Date.parse(addedAt) + 21 * 86400000).toISOString();
+export const checkStatusLabel: Record<string, string> = { valid: 'Valid', not_valid: 'Not valid', could_not_check: 'Could not check' };
+export const isHeic = (f: { name: string; type: string }) => /^image\/hei[cf]$/i.test(f.type) || /\.hei[cf]$/i.test(f.name);

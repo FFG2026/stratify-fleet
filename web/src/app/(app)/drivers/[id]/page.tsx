@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getContext, getDriverFile, canViewDrivers, isDriverOnly, orgName } from '@/lib/data';
 import { PageHeader, Notice, LinkButton } from '@/components/ui';
-import { Checklist, Documents, History, Permissions } from '@/components/DriverFile';
+import { Checklist, Documents, History, Permissions, LicenceCheckStaff } from '@/components/DriverFile';
 import { checkedId } from '@/lib/ids';
 
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
@@ -34,6 +34,7 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
       <Checklist file={file} />
       <Documents file={file} editable={false} />
       <Permissions file={file} editable={false} />
+      <LicenceCheckStaff file={file} driver={p.user_id} />
       <History file={file} editable={false} />
       <p><Link prefetch={false} className="textbtn" href="/drivers">← Back to all drivers</Link></p>
     </>

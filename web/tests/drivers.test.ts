@@ -42,3 +42,18 @@ describe('file checklist', () => {
     expect(items.find(i => i.label === 'Convictions declared')?.done).toBe(true);
   });
 });
+
+import { codeLatestExpiry, isHeic, lastEight } from '@/lib/drivers';
+describe('licence check helpers', () => {
+  it('gives the last 8 characters of the licence number', () => {
+    expect(lastEight('MORGA657054SM9IJ')).toBe('054SM9IJ');
+    expect(lastEight('morga 657054 sm9ij')).toBe('054sm9ij');
+    expect(lastEight(null)).toBeNull();
+  });
+  it('works out the latest a check code can last to', () => { expect(codeLatestExpiry('2026-10-01T10:00:00.000Z')).toBe('2026-10-22T10:00:00.000Z'); });
+  it('spots iPhone HEIC photos by type or name', () => {
+    expect(isHeic({ name: 'IMG_1.HEIC', type: '' })).toBe(true);
+    expect(isHeic({ name: 'a.jpg', type: 'image/heif' })).toBe(true);
+    expect(isHeic({ name: 'a.jpg', type: 'image/jpeg' })).toBe(false);
+  });
+});

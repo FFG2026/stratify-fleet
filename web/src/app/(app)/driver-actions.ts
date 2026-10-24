@@ -5,7 +5,7 @@ import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
 import { checkedId } from '@/lib/ids';
 import { parseDate } from '@/lib/dates';
-import { driverFleetOf, isDriverOnly, suggestDrivers } from '@/lib/data';
+import { canViewDrivers, driverFleetOf, isDriverOnly, suggestDrivers } from '@/lib/data';
 import { consents, consentVersion, documentKinds, maxFileBytes, sniffFile, type ConsentKind } from '@/lib/drivers';
 import { deleteFile, uploadFile } from '@/lib/storage';
 import { createLimiter } from '@/lib/vehicle-lookup';
@@ -46,7 +46,10 @@ export async function uploadDriverDocument(form: FormData): Promise<ActionResult
     if (file.size > maxFileBytes) return { ok: false, message: 'That file is over 4 MB. Take a smaller photo or a PDF under 4 MB.' };
     const bytes = new Uint8Array(await file.arrayBuffer());
     const kindOfFile = sniffFile(bytes);
-    if (!kindOfFile) return { ok: false, message: 'Upload a photo (JPG, PNG or WebP) or a PDF.' };
+    if (!kindOfFile) {
+      const heic = String.fromCharCode(...bytes.slice(4, 8)) === 'ftyp';
+      return { ok: false, message: heic ? 'That photo is in HEIC format and could not be converted. Choose it from Photo Library, or take a new photo with the camera option.' : 'Upload a photo (JPG, PNG or WebP) or a PDF.' };
+    }
     if (!fleet) return { ok: false, message: 'Your account is not linked to a fleet yet.' };
     const path = `${fleet}/${ctx.user.id}/${crypto.randomUUID()}.${kindOfFile.ext}`;
     await uploadFile(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, kindOfFile.type);
@@ -107,6 +110,34 @@ export async function removeDriverRecord(form: FormData): Promise<ActionResult> 
 export async function declareNone(form: FormData): Promise<ActionResult> {
   try { await asDriver(); await rpc('declare_none', { p_kind: String(form.get('kind') ?? '') }); refresh(); return done('Recorded.'); }
   catch (error) { return fail(error); }
+}
+
+export async function addCheckCode(form: FormData): Promise<ActionResult> {
+  try {
+    await asDriver();
+    const code = z.string().trim().min(6, 'Enter the whole code.').max(16, 'That code is too long.').regex(/^[A-Za-z0-9 ]+$/, 'The code is letters and numbers only.').parse(form.get('code'));
+    await rpc('add_check_code', { p_code: code });
+    refresh();
+    return done('Code saved. Your fleet will use it within 21 days of making it.');
+  } catch (error) { return fail(error); }
+}
+
+// Staff record what the DVLA's site showed. The portal never contacts the DVLA.
+export async function recordLicenceCheck(form: FormData): Promise<ActionResult> {
+  try {
+    const ctx = await requireContext();
+    if (!canViewDrivers(ctx)) return { ok: false, message: 'You cannot record licence checks.' };
+    const status = z.enum(['valid', 'not_valid', 'could_not_check'], { message: 'Choose the result of the check.' }).parse(form.get('status'));
+    const pointsRaw = String(form.get('points') ?? '').trim(), points = pointsRaw ? Number(pointsRaw) : null;
+    if (points !== null && (!Number.isInteger(points) || points < 0 || points > 36)) return { ok: false, message: 'Penalty points must be a whole number from 0 to 36.' };
+    const str = (k: string, max: number) => { const v = String(form.get(k) ?? '').trim(); if (v.length > max) throw Object.assign(new Error('One of the notes is too long.'), { status: 400 }); return v || null; };
+    await rpc('record_licence_check', {
+      p_driver: checkedId(form.get('driver')), p_status: status, p_points: points, p_entitlements: str('entitlements', 200),
+      p_endorsements: str('endorsements', 500), p_notes: str('notes', 500), p_next_due: optionalDate(form.get('next'))
+    });
+    revalidatePath('/drivers', 'layout');
+    return done('Check recorded.');
+  } catch (error) { return fail(error); }
 }
 
 // Name suggestions for staff (fleet and insurer side). Row-level security limits them to the drivers the person may see.
