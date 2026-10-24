@@ -72,14 +72,14 @@ export async function getCoverActivity(limit = 25) {
 
 // ---- customer dashboard figures
 export async function getSummary(ctx: Context) {
-  const recent = fleetQuery({ limit: '5' }).query, all = fleetQuery({ limit: '1' }).query, active = fleetQuery({ limit: '1', status: 'active' }).query;
-  const [recentRows, total, covered, events] = await Promise.all([
+  const recent = fleetQuery({ limit: '5' }).query, all = fleetQuery({ limit: '1' }).query, active = fleetQuery({ limit: '1', status: 'active' }).query, upcoming = fleetQuery({ limit: '1', status: 'scheduled' }).query;
+  const [recentRows, total, covered, scheduled, events] = await Promise.all([
     rest<PeriodRow[]>('/rest/v1/coverage_periods?' + recent),
-    countRows('coverage_periods', all.toString()), countRows('coverage_periods', active.toString()),
+    countRows('coverage_periods', all.toString()), countRows('coverage_periods', active.toString()), countRows('coverage_periods', upcoming.toString()),
     getCoverActivity(25)
   ]);
   void ctx;
-  return { periods: total, covered, recent: recentRows.filter(r => !r.voided_at).map(normalisePeriod), events };
+  return { periods: total, covered, scheduled, recent: recentRows.filter(r => !r.voided_at).map(normalisePeriod), events };
 }
 
 // ---- live insurer / platform dashboard
@@ -165,7 +165,7 @@ import { pageOptions } from '@/lib/queries';
 export function demoSummary() {
   const t = today();
   const covered = demoPeriods.filter(r => r.starts_on <= t && (!r.ends_on || r.ends_on > t)).length;
-  return { periods: demoPeriods.length, covered, recent: demoPeriods.slice(0, 5), events: demoEvents };
+  return { periods: demoPeriods.length, covered, scheduled: demoPeriods.filter(r => r.starts_on > t).length, recent: demoPeriods.slice(0, 5), events: demoEvents };
 }
 export function demoFleetPage(params: Params): Page<Period> {
   const { offset, limit } = pageOptions(params);

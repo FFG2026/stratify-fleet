@@ -168,6 +168,7 @@ try {
     check('customer lands on the fleet dashboard', new URL(page.url()).pathname === '/customer', page.url());
     let t = await text(page);
     check('customer sees only their own fleet', t.includes('Northbank Logistics') && !t.includes('Riverside Couriers') && !t.includes('Hilltop'), t.slice(-400));
+    check('customer dashboard has no Customers box and its boxes are links', !(await page.locator('.stat-label:has-text("Customers")').count()) && await page.locator('a.stat-link:has-text("Scheduled additions")').getAttribute('href') === '/fleet?status=scheduled' && await page.locator('a.stat-link:has-text("Covered vehicles")').count() === 1);
     await go(page, base + '/insurer'); t = await text(page);
     check('customer cannot use the insurer dashboard', t.includes('requires insurer or platform administrator'));
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);

@@ -32,10 +32,10 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
         </div>
       )}
       <Stats items={[
-        ['Fleet customers', fleets.length, 'In this view'],
-        ['Vehicles on cover', sum('vehicles_on_cover'), 'Covered right now'],
-        ['Added / removed (7 days)', `${c.added7} / ${c.removed7}`, 'Recorded changes'],
-        ['Scheduled changes', c.scheduledAdds + c.scheduledRemovals, `${c.scheduledAdds} additions · ${c.scheduledRemovals} removals in the next 7 days`]
+        ['Fleet customers', fleets.length, 'In this view', '#portfolio'],
+        ['Vehicles on cover', sum('vehicles_on_cover'), 'Covered right now', '/fleet?status=active'],
+        ['Added / removed (7 days)', `${c.added7} / ${c.removed7}`, 'Recorded changes', '/changes'],
+        ['Scheduled changes', c.scheduledAdds + c.scheduledRemovals, `${c.scheduledAdds} additions · ${c.scheduledRemovals} removals in the next 7 days`, '/changes']
       ]} />
       <div className="grid-two">
         <div className="panel">
@@ -57,7 +57,7 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
           <Attention icon="⇄" title="MIB / MID integration" text="Not connected. No external submissions are sent." />
         </div></section>
       </div>
-      <section className="panel">
+      <section className="panel" id="portfolio">
         <div className="panel-header"><div><h2>Fleet portfolio</h2><p className="subtext">Vehicles per customer, from live records</p></div><span className="muted">{fleets.length} fleets</span></div>
         <div className="table-scroll"><table>
           <thead><tr><th>Customer</th><th>Insurer</th><th>Vehicles</th><th>On cover</th><th>Scheduled</th><th>Workspace</th></tr></thead>
@@ -81,9 +81,9 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
   );
 }
 
-export function StaticDashboard({ ctx, summary, showOrgNote }: {
-  ctx: Context; showOrgNote: boolean;
-  summary: { periods: number; covered: number; recent: Period[]; events: { id: string | number; registration: string; action: string; created_at: string }[] };
+export function StaticDashboard({ ctx, summary, showOrgNote, fleetView = false }: {
+  ctx: Context; showOrgNote: boolean; fleetView?: boolean;
+  summary: { periods: number; covered: number; scheduled: number; recent: Period[]; events: { id: string | number; registration: string; action: string; created_at: string }[] };
 }) {
   const customers = ctx.orgs.filter(o => o.kind === 'customer');
   const insurers = ctx.orgs.filter(o => o.kind === 'insurer');
@@ -91,10 +91,12 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
   return (
     <>
       <Stats items={[
-        ['Covered vehicles', summary.covered, 'As at today'],
-        ['Customers', customers.length, 'Within your permitted portfolio'],
-        ['Policies', ctx.policies.length, 'Authorised policy records'],
-        ['Coverage periods', summary.periods, 'Historical and current records']
+        ['Covered vehicles', summary.covered, 'As at today', '/fleet?status=active'],
+        fleetView
+          ? ['Scheduled additions', summary.scheduled, 'Vehicles starting on a future date', '/fleet?status=scheduled']
+          : ['Customers', customers.length, 'Within your permitted portfolio', '#portfolio'],
+        ['Policies', ctx.policies.length, 'Authorised policy records', '#portfolio'],
+        ['Coverage periods', summary.periods, 'Historical and current records', '/fleet']
       ]} />
       <div className="grid-two">
         <div className="panel">
@@ -114,7 +116,7 @@ export function StaticDashboard({ ctx, summary, showOrgNote }: {
         </div></section>
       </div>
       {showOrgNote && <div className="notice">{insurers.length} insurer workspaces · {customers.length} fleet customers · All figures reflect records available to your signed-in account.</div>}
-      <section className="panel">
+      <section className="panel" id="portfolio">
         <div className="panel-header"><div><h2>Fleet portfolio</h2><p className="subtext">Customers in your authorised workspace</p></div><span className="muted">{customers.length} fleets</span></div>
         <div className="table-scroll"><table>
           <thead><tr><th>Customer</th><th>Insurer</th><th>Policies</th><th>Workspace</th></tr></thead>

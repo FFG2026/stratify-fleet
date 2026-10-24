@@ -8,16 +8,21 @@ export const Badge = ({ children, warn = false }: { children: ReactNode; warn?: 
 export const fmt = (n: number | string) => Number(n).toLocaleString('en-GB');
 export const Notice = ({ children, alert = false }: { children: ReactNode; alert?: boolean }) => <div className="notice" role={alert ? 'alert' : undefined}>{children}</div>;
 
-export function Stats({ items }: { items: [string, string | number, string][] }) {
+export function Stats({ items }: { items: [string, string | number, string, string?][] }) {
   return (
     <div className="stats">
-      {items.map(([label, value, note]) => (
-        <div className="stat" key={label}>
-          <div className="stat-label">{label}</div>
-          <div className="stat-number">{typeof value === 'number' ? fmt(value) : value}</div>
-          <div className="stat-note">{note}</div>
-        </div>
-      ))}
+      {items.map(([label, value, note, href]) => {
+        const body = (
+          <>
+            <div className="stat-label">{label}</div>
+            <div className="stat-number">{typeof value === 'number' ? fmt(value) : value}</div>
+            <div className="stat-note">{note}{href ? ' →' : ''}</div>
+          </>
+        );
+        return href
+          ? <Link prefetch={false} className="stat stat-link" href={href} key={label}>{body}</Link>
+          : <div className="stat" key={label}>{body}</div>;
+      })}
     </div>
   );
 }
