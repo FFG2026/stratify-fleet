@@ -118,6 +118,8 @@ try {
 
     // reconciliation
     await go(page, base + '/reconciliation');
+    t = await text(page);
+    check('reconciliation shows a live list of vehicles with cover before any report is generated', t.includes('Live preview') && t.includes('AB10XYZ') && !t.includes('AB19XYZ') && /\b31\b/.test(t), t.slice(0, 700));
     check('generate is disabled until one policy is chosen', await page.locator('button:has-text("Generate saved report")').isDisabled());
     await page.selectOption('select >> nth=1', { label: 'POL-1' }).catch(() => {});
     await go(page, base + `/reconciliation?month=2026-10&policy=30000000-0000-4000-8000-000000000001`);

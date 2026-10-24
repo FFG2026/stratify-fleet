@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { demoAccountEmail } from '@/lib/env';
 import { allRows, countRows, rest, rpc } from '@/lib/rest';
-import { londonDate, nextDate } from '@/lib/dates';
+import { londonDate, nextDate, monthBounds } from '@/lib/dates';
 import { fleetQuery, historyQuery, type Params } from '@/lib/queries';
 import { checkedId } from '@/lib/ids';
 import { demoOrgs, demoPolicies } from '@/lib/demo';
@@ -115,6 +115,35 @@ export async function getReport(id: string): Promise<{ report: Report; lines: Re
   if (!reports.length) return null;
   const lines = await allRows<ReportLine>('reconciliation_lines', 'reconciliation_id=eq.' + id + '&order=id.asc');
   return { report: reports[0], lines };
+}
+
+// Live, provisional list of vehicles with cover in a month, read from the register (not a saved report).
+// Uses the same date-only rule as the demo preview: start date included, removal date excluded.
+export async function getMonthPreview(month: string, policy?: string) {
+  const [first, next] = monthBounds(month);
+  const day = 86400000, iso = (ms: number) => new Date(ms).toISOString();
+  const map = new Map<string, { policy_id: string; registration: string; days: number }>();
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const query = new URLSearchParams({
+      select: 'policy_id,cover_start,cover_end,vehicle:vehicles!inner(registration)',
+      voided_at: 'is.null',
+      cover_start: 'lt.' + iso(next + day),
+      or: '(cover_end.is.null,cover_end.gt.' + iso(first - day) + ')',
+      order: 'id.asc', offset: String(offset), limit: '1000'
+    });
+    if (policy) query.set('policy_id', 'eq.' + checkedId(policy));
+    const batch = await rest<{ policy_id: string; cover_start: string; cover_end: string | null; vehicle: { registration: string } | null }[]>('/rest/v1/coverage_periods?' + query);
+    for (const r of batch) {
+      if (!r.vehicle) continue;
+      let days = 0;
+      try { days = insuredDays(londonDate(r.cover_start), r.cover_end ? londonDate(r.cover_end) : null, month); } catch { continue; }
+      if (!days) continue;
+      const key = r.policy_id + ':' + r.vehicle.registration, hit = map.get(key);
+      if (hit) hit.days += days; else map.set(key, { policy_id: r.policy_id, registration: r.vehicle.registration, days });
+    }
+    if (batch.length < 1000) break;
+  }
+  return [...map.values()].sort((a, b) => a.registration.localeCompare(b.registration));
 }
 
 // ---- members
