@@ -170,6 +170,8 @@ try {
     check('customer sees only their own fleet', t.includes('Northbank Logistics') && !t.includes('Riverside Couriers') && !t.includes('Hilltop'), t.slice(-400));
     check('customer dashboard has no Customers box and its boxes are links', !(await page.locator('.stat-label:has-text("Customers")').count()) && await page.locator('a.stat-link:has-text("Scheduled additions")').getAttribute('href') === '/fleet?status=scheduled' && await page.locator('a.stat-link:has-text("Covered vehicles")').count() === 1);
     await go(page, base + '/insurer'); t = await text(page);
+    await page.goto(base + '/users'); check('fleet user sees no organisation picker on Users', await page.getByText('People in').count() === 1 && await page.locator('label:has-text("Organisation")').count() === 0);
+    await page.goto(base + '/customer');
     check('customer cannot use the insurer dashboard', t.includes('requires insurer or platform administrator'));
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('own row is marked "This is you" and has no controls', t.includes('This is you'), t.slice(-300));
