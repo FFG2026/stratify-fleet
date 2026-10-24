@@ -7,7 +7,7 @@ export type PasswordState = { error: string } | null;
 
 export async function changePassword(_prev: PasswordState, form: FormData): Promise<PasswordState> {
   const password = String(form.get('password') ?? ''), again = String(form.get('again') ?? '');
-  if (password.length < 12) return { error: 'Use at least 12 characters.' };
+  if (password.length < 8) return { error: 'Use at least 8 characters.' };
   if (password.length > 72) return { error: 'Use 72 characters or fewer.' };
   if (password !== again) return { error: 'The two passwords do not match.' };
   const supabase = await createClient();

@@ -45,7 +45,7 @@ export function AddMemberForm({ org, kind }: { org: string; kind: string }) {
       <form className="filters" onSubmit={onSubmit}>
         <input type="hidden" name="org" value={org} />
         <label>Email<input name="email" type="email" required maxLength={254} autoComplete="off" /></label>
-        <label>Temporary password (optional)<input name="password" type="text" minLength={12} maxLength={72} autoComplete="off" spellCheck={false} placeholder="At least 12 characters" /></label>
+        <label>Temporary password (optional)<input name="password" type="text" minLength={8} maxLength={72} autoComplete="off" spellCheck={false} placeholder="At least 8 characters" /></label>
         <label>Role<select name="role" defaultValue="" required>{[<option key="" value="" disabled>Choose a role</option>, ...rolesForKind(kind).map(r => <option key={r} value={r}>{roleLabels[r]}</option>)]}</select></label>
         <button className="primary" disabled={pending}>Add person</button>
       </form>

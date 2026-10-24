@@ -115,7 +115,7 @@ export async function generateReport(form: FormData): Promise<ActionResult> {
 }
 
 // ---- people
-const passwordSchema = z.string().min(12, 'The temporary password must be at least 12 characters.').max(72, 'The temporary password is too long (72 characters at most).');
+const passwordSchema = z.string().min(8, 'The temporary password must be at least 8 characters.').max(72, 'The temporary password is too long (72 characters at most).');
 
 export async function addMember(form: FormData): Promise<ActionResult> {
   await requireContext();
