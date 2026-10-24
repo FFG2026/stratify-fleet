@@ -104,3 +104,29 @@ a.button-link{display:inline-block;background:white;color:var(--ink);border:1px 
 .form-error{color:#9a3b2c}
 .steps{margin:0 0 14px;padding-left:20px;display:grid;gap:6px}.steps a{color:var(--accent);font-weight:600}
 .panel h3{margin:18px 0 8px}
+
+/* Fleet CRM: focused work surfaces, with bounded boards and tables on phones. */
+fieldset{border:0;padding:0;margin:0;min-width:0;display:grid;gap:18px}
+textarea{font:inherit;display:block;width:100%;max-width:100%;min-width:0;border:1px solid var(--line);border-radius:6px;padding:11px 12px;background:#fff;color:var(--ink);resize:vertical}
+textarea:focus{outline:2px solid #7eac78;outline-offset:2px}
+.crm-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 24px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+.crm-tabs a{padding:10px 15px;border:1px solid transparent;border-radius:7px;text-decoration:none;color:var(--muted);font-weight:600}
+.crm-tabs a.active{color:var(--ink);background:#eaf0e1;border-color:#dbe5ce}
+.crm-search{display:flex;gap:10px;align-items:flex-end;flex:2;min-width:0}.crm-search label{flex:1}
+.crm-intro{display:flex;justify-content:space-between;align-items:center;gap:24px;padding:28px;border-radius:12px;background:#eaf0e1;border:1px solid #dbe5ce;margin-bottom:24px}
+.crm-intro h2{font-size:23px;max-width:600px}.crm-intro .button-link{flex-shrink:0}
+.crm-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.crm-shortcuts a{display:block;color:inherit;text-decoration:none}.crm-shortcuts a:hover{border-color:#7eac78}
+.crm-calendar{display:grid;gap:0}.crm-calendar-item{display:flex;align-items:center;gap:18px;padding:17px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none;min-width:0}
+.crm-calendar-item time{background:#f5f6f2;padding:12px;border-radius:8px;white-space:nowrap;font-size:12px;min-width:75px;text-align:center}
+.crm-calendar-item>div{flex:1;min-width:0;overflow-wrap:anywhere}.crm-calendar-item:hover strong{color:var(--accent)}
+.crm-task-list{display:grid;gap:14px;margin:16px 0}.crm-task-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;min-width:0}
+.crm-task-heading{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;margin-bottom:12px}.crm-task-heading>div{min-width:0}.crm-task-heading h3{font-size:16px;overflow-wrap:anywhere}
+.crm-task-card form{margin-top:14px}.crm-task-card fieldset{gap:12px}.crm-task-card .eyebrow{display:block;letter-spacing:1px;margin-bottom:9px}
+.crm-board{display:grid;grid-template-columns:repeat(5,minmax(245px,1fr));gap:16px;overflow-x:auto;max-width:100%;padding:4px 0 18px;contain:inline-size;align-items:start}
+.crm-board-column{background:#edf1e6;border-radius:10px;padding:12px;min-width:0}.crm-board-column>h2{font-size:14px;margin:6px}.crm-board-column .crm-task-card{padding:14px}.crm-board-column .crm-task-heading{flex-wrap:wrap}
+.crm-note-cell{white-space:normal;min-width:180px;max-width:360px;overflow-wrap:anywhere}
+.crm-disclosure{margin-top:20px}.crm-disclosure summary{cursor:pointer;font-weight:600;color:var(--accent);padding:12px 0;min-height:44px}.crm-disclosure form{margin-top:16px}
+.panel-body>h2+form{margin-top:22px}
+@media(max-width:900px){.crm-shortcuts{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:700px){.crm-tabs{gap:4px}.crm-tabs a{padding:10px 11px;font-size:12px;min-height:44px}.crm-search{flex-wrap:wrap;width:100%}.crm-search label{flex-basis:100%}.crm-intro{padding:22px;align-items:flex-start;flex-direction:column}.crm-calendar-item{gap:10px;flex-wrap:wrap}.crm-calendar-item>div{flex-basis:55%}.crm-calendar-item .badge{margin-left:85px}.crm-task-heading{flex-wrap:wrap}.crm-board{grid-template-columns:repeat(5,minmax(260px,1fr))}textarea{font-size:16px}}

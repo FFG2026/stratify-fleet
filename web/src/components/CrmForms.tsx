@@ -1,0 +1,40 @@
+'use client';
+import { useAction } from './useAction';
+import { saveProfile, addContact, addTask, updateTask, addDocument } from '@/app/(app)/crm/actions';
+import { operationalStatuses, taskCategories, taskStatuses, labelOf, type CrmVehicle, type Contact, type Task } from '@/lib/crm';
+
+type Fleet={id:string;name:string};
+const Result=({result}:{result:{ok:boolean;message:string}|null})=><p role="status" aria-live="polite" className={'form-note'+(result&&!result.ok?' form-error':'')}>{result?.message}</p>;
+function FleetField({fleets,fleet,vehicle}:{fleets:Fleet[];fleet:string;vehicle?:CrmVehicle}){return vehicle?<input type="hidden" name="fleet_id" value={vehicle.fleet_id}/>:<label>Fleet<select name="fleet_id" required defaultValue={fleet}><option value="">Select a fleet</option>{fleets.map(f=><option key={f.id} value={f.id}>{f.name}</option>)}</select></label>;}
+function VehicleField({vehicle}:{vehicle?:CrmVehicle}){return vehicle?<input type="hidden" name="vehicle_id" value={vehicle.id}/>:<label>Vehicle registration (optional)<input name="registration" maxLength={12} placeholder="AB26 CDE"/><span className="form-note">Must belong to the chosen fleet.</span></label>;}
+export function ProfileEditor({vehicle,disabled}:{vehicle:CrmVehicle;disabled:boolean}){
+ const {pending,result,onSubmit}=useAction(saveProfile,false),p=vehicle.profile;
+ return <form onSubmit={onSubmit}><fieldset disabled={disabled||pending}><input type="hidden" name="fleet_id" value={vehicle.fleet_id}/><input type="hidden" name="vehicle_id" value={vehicle.id}/><div className="form-grid">
+  <label>Depot<input name="depot" maxLength={120} defaultValue={p?.depot||''}/></label>
+  <label>Availability<select name="operational_status" defaultValue={p?.operational_status||'available'}>{operationalStatuses.map(s=><option key={s} value={s}>{labelOf(s)}</option>)}</select></label>
+  <label>Mileage<input name="mileage" type="number" min="0" max="5000000" step="1" defaultValue={p?.mileage??''}/></label>
+  <label>Mileage reading date<input name="mileage_recorded_on" type="date" defaultValue={p?.mileage_recorded_on||''}/></label>
+  {([['mot_due','MOT due'],['tax_due','Tax due'],['service_due','Service due'],['replacement_due','Replacement / return date']] as const).map(([key,label])=><label key={key}>{label}<input name={key} type="date" defaultValue={p?.[key]||''}/></label>)}
+  <label>Service due at mileage<input name="service_due_mileage" type="number" min="0" max="5000000" step="1" defaultValue={p?.service_due_mileage??''}/></label>
+  <label>Ownership<select name="ownership" defaultValue={p?.ownership||'owned'}>{['owned','leased','hired'].map(s=><option key={s} value={s}>{labelOf(s)}</option>)}</select></label>
+  <label>Monthly lease / hire payment (£)<input name="monthly_payment" type="number" min="0" max="1000000" step="0.01" defaultValue={p?.monthly_payment??''}/></label>
+ </div>{p?.service_due_mileage!=null&&p.mileage!=null&&<p className="form-note">{p.service_due_mileage<=p.mileage?'Service mileage reached':`Service due in ${(p.service_due_mileage-p.mileage).toLocaleString('en-GB')} miles`}, based on the reading recorded {p.mileage_recorded_on||'without a date'}.</p>}<label>Vehicle notes<textarea name="notes" maxLength={4000} rows={3} defaultValue={p?.notes||''}/></label><button className="primary">Save vehicle details</button></fieldset><Result result={result}/></form>;
+}
+type Props={fleets:Fleet[];fleet:string;disabled:boolean;vehicle?:CrmVehicle};
+export function ContactForm({fleets,fleet,disabled,contact}:Props&{contact?:Contact}){
+ const {pending,result,onSubmit}=useAction(addContact,!contact);
+ return <form onSubmit={onSubmit}><fieldset disabled={disabled||pending}>{contact&&<><input type="hidden" name="id" value={contact.id}/><input type="hidden" name="fleet_id" value={contact.fleet_id}/></>}<div className="form-grid">{!contact&&<FleetField fleets={fleets} fleet={fleet}/>}<label>Name<input name="name" required maxLength={160} defaultValue={contact?.name||''}/></label><label>Type<select name="kind" defaultValue={contact?.kind||'fleet'}>{['fleet','garage','recovery','leasing','insurer','other'].map(k=><option key={k} value={k}>{labelOf(k)}</option>)}</select></label><label>Company<input name="company" maxLength={160} defaultValue={contact?.company||''}/></label><label>Email<input name="email" type="email" maxLength={254} defaultValue={contact?.email||''}/></label><label>Phone<input name="phone" type="tel" maxLength={40} defaultValue={contact?.phone||''}/></label></div><label>Notes<textarea name="notes" maxLength={4000} rows={3} defaultValue={contact?.notes||''}/></label><button className="primary">{contact?'Save contact':'Add contact'}</button></fieldset><Result result={result}/></form>;
+}
+export function TaskForm({fleets,fleet,disabled,vehicle,contacts}:{contacts:Contact[]}&Props){
+ const {pending,result,onSubmit}=useAction(addTask);
+ return <form onSubmit={onSubmit}><fieldset disabled={disabled||pending}><div className="form-grid"><FleetField fleets={fleets} fleet={fleet} vehicle={vehicle}/><VehicleField vehicle={vehicle}/><label>Task title<input name="title" required maxLength={200}/></label><label>Category<select name="category">{taskCategories.map(k=><option key={k} value={k}>{labelOf(k)}</option>)}</select></label><label>Priority<select name="priority">{['low','normal','high','urgent'].map(k=><option key={k} value={k}>{labelOf(k)}</option>)}</select></label><label>Due date<input name="due_on" type="date"/></label>
+  <label>Assigned contact<select name="assignee_id"><option value="">Unassigned</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.name} · {c.company}</option>)}</select></label><label>Supplier<select name="supplier_id"><option value="">Not selected</option>{contacts.map(c=><option key={c.id} value={c.id}>{c.company||c.name}</option>)}</select></label><label>Cost (£, optional)<input name="cost" type="number" min="0" max="10000000" step="0.01"/></label></div><p className="form-note">Contacts and vehicles must belong to the chosen fleet. No messages are sent automatically.</p><label>Work notes<textarea name="detail" rows={3} maxLength={4000}/></label><button className="primary">Create task</button></fieldset><Result result={result}/></form>;
+}
+export function TaskUpdate({task,disabled}:{task:Task;disabled:boolean}){
+ const {pending,result,onSubmit}=useAction(updateTask,false);
+ return <form onSubmit={onSubmit}><input type="hidden" name="id" value={task.id}/><fieldset disabled={disabled||pending}><label>Status<select name="status" defaultValue={task.status}>{taskStatuses.map(s=><option key={s} value={s}>{labelOf(s)}</option>)}</select></label><label>Due date<input name="due_on" type="date" defaultValue={task.due_on||''}/></label><label>Recorded cost (£)<input name="cost" type="number" min="0" max="10000000" step="0.01" defaultValue={task.cost??''}/></label><label>Work notes<textarea name="detail" defaultValue={task.detail} maxLength={4000} rows={2}/></label><button>Update task</button></fieldset><Result result={result}/></form>;
+}
+export function DocumentForm({fleets,fleet,disabled,vehicle}:Props){
+ const {pending,result,onSubmit}=useAction(addDocument);
+ return <form onSubmit={onSubmit}><fieldset disabled={disabled||pending}><div className="form-grid"><FleetField fleets={fleets} fleet={fleet} vehicle={vehicle}/><VehicleField vehicle={vehicle}/><label>Document title<input name="title" required maxLength={200}/></label><label>Expiry date (optional)<input name="expires_on" type="date"/></label><label>PDF or photo (up to 4 MB)<input name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required/></label></div><button className="primary">Upload document</button></fieldset><Result result={result}/></form>;
+}
