@@ -176,3 +176,5 @@ button.big{min-height:52px;font-size:16px;padding:12px 28px}
 .notices li{padding:8px 10px;border-radius:8px;overflow-wrap:anywhere}.notices li.unread{background:#fbf6e8;border:1px solid #e3c98d}
 .nav-badge{margin-left:auto;background:#c0392b;color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:2px 7px;min-width:20px;text-align:center}
 .sidebar nav a{display:flex;align-items:center}
+
+.brand-name{margin-top:10px;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--ink);overflow-wrap:anywhere}
