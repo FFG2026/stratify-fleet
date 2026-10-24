@@ -146,7 +146,7 @@ try {
       check('the page never shows the password back', !(await text(page)).includes('Temporary-pass-1')); }
     await page.fill('input[name=email]', 'short@example.com'); await page.fill('input[name=password]', 'short'); await page.selectOption('form.filters select[name=role]', 'driver');
     await page.click('button:has-text("Add person")');
-    await page.waitForFunction(() => document.querySelector('input[name=password]')?.validity?.tooShort === true || /at least 12/.test(document.body.innerText));
+    await page.waitForFunction(() => document.querySelector('input[name=password]')?.validity?.tooShort === true || /at least 8/.test(document.body.innerText));
     check('a short temporary password is refused', !(await calls()).some(c => c.body?.email === 'short@example.com'));
     await page.click('button:has-text("Cancel invitation")'); await page.waitForTimeout(500);
     check('cancel invitation calls revoke_invitation', (await calls()).some(c => c.rpc === 'revoke_invitation'));
