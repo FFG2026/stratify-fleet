@@ -152,7 +152,7 @@ try {
     await page.click('button:has-text("Cancel invitation")'); await page.waitForTimeout(500);
     check('cancel invitation calls revoke_invitation', (await calls()).some(c => c.rpc === 'revoke_invitation'));
 
-    await go(page, base + '/crm'); check('planned modules render a roadmap page', (await text(page)).includes('PLANNED MODULE'));
+    { const r = await page.goto(base + '/no-such-module'); check('an unknown page gives a not-found response', r.status() === 404, String(r.status())); }
     await go(page, base + '/nope'); check('unknown pages return a not-found page', (await text(page)).includes('Page not found'));
 
     await go(page, base + '/overview');
@@ -261,6 +261,83 @@ try {
     check('customer menu hides the platform and insurer dashboards', !custNav.some(x => /Platform overview|Insurer dashboard/.test(x)) && custNav.some(x => /Fleet dashboard/.test(x)), custNav.join('|'));
     await go(page, base + '/changes');
     check('customer can add vehicles (form enabled)', !(await page.locator('button:has-text("Record addition")').isDisabled()));
+    await context.close(); }
+
+  // ---- claims: driver reports, fleet reviews and sends, insurer asks, fleet answers, insurer closes
+  const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64');
+  const pick = (page, name, v) => page.locator(`input[name=${name}][value=${v}]`).check({ force: true });
+  let claimUrl = '';
+  { const { context, page } = await session('driver@example.test');
+    await go(page, base + '/claims'); let t = await text(page);
+    check('a driver sees the Claims page with a way to report', t.includes('Claims') && /Report/i.test(t), t.slice(0, 300));
+    await go(page, base + '/claims/new'); t = await text(page);
+    check('the report form asks about injuries, police and the other party', ['Was anyone injured?', 'Did the police attend?', 'Was another vehicle or person involved?'].every(x => t.includes(x)), t.slice(0, 400));
+    await page.fill('input[name=registration]', 'AB10XYZ'); await page.fill('input[name=date]', '2026-10-23'); await page.fill('input[name=time]', '14:30');
+    await page.fill('input[name=location]', 'A1 northbound near Newark'); await page.fill('textarea[name=description]', 'Another vehicle reversed into the rear of the van while queuing.');
+    await page.click('button.primary'); await page.waitForTimeout(800);
+    check('the form will not save until injury is answered', !(await calls()).some(c => c.rpc === 'report_claim'));
+    await pick(page, 'injured', 'yes'); await page.fill('textarea[name=injury]', 'Driver has a sore neck.'); await pick(page, 'police', 'no'); await pick(page, 'driveable', 'yes'); await pick(page, 'thirdParty', 'yes');
+    await page.fill('input[name=partyName]', 'Sam Other'); await page.fill('input[name=partyReg]', 'ZZ11AAA');
+    await page.setInputFiles('input[name=photos]', [{ name: 'damage.png', mimeType: 'image/png', buffer: PNG }]);
+    await page.click('button.primary'); await urlHas(page, /\/claims\/[0-9a-f-]{36}/); await page.waitForLoadState('networkidle'); claimUrl = new URL(page.url()).pathname;
+    t = await text(page);
+    check('the report is saved with the injury answer and goes to the fleet, not the insurer', (await calls()).some(c => c.rpc === 'report_claim' && c.body.p_injured === true && c.body.p_registration === 'AB10XYZ') && t.includes('Reported') && t.includes('CLM-2026-'), t.slice(0, 500));
+    check('the photo was stored privately and recorded against the claim', (await calls()).some(c => c.storage === 'POST' && c.path.startsWith('claim-files/')) && (await calls()).some(c => c.rpc === 'add_claim_attachment' && c.body.p_name === 'damage.png'));
+    check('the driver cannot send the claim to the insurer', (await page.locator('button:has-text("Send to insurer")').count()) === 0);
+    await context.close(); }
+  { const { context, page } = await session('insurer@example.test');
+    await go(page, base + claimUrl); const t = await text(page);
+    check('the insurer cannot see a claim the fleet has not sent', new URL(page.url()).pathname !== claimUrl || /not found|could not|No claim/i.test(t), t.slice(0, 200));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + '/claims'); let t = await text(page);
+    check('the fleet sees the driver\'s new claim and a notification', t.includes('AB10XYZ') && /New claim reported/.test(t), t.slice(0, 500));
+    check('the Claims menu item shows an unread badge', (await page.locator('.nav-badge').count()) >= 1);
+    await go(page, base + claimUrl); t = await text(page);
+    check('the fleet sees the injury answer, the photo and the other party', t.includes('Driver has a sore neck') && t.includes('damage.png') && t.includes('Sam Other'), t.slice(0, 600));
+    check('Send to insurer is not available until the claim has been reviewed', await page.locator('button:has-text("Send to insurer")').isDisabled());
+    await page.fill('textarea[name=notes]', 'Photos and details look complete.'); await page.click('button:has-text("Mark as reviewed")'); await page.waitForTimeout(1500);
+    check('reviewing records the assessment', (await calls()).some(c => c.rpc === 'assess_claim'));
+    await page.click('button:has-text("Send to insurer")'); await page.waitForTimeout(1500); t = await text(page);
+    check('one click sends the reviewed claim to the insurer', (await calls()).some(c => c.rpc === 'submit_claim') && /Sent to the insurer|Submitted/i.test(t), t.slice(0, 500));
+    await context.close(); }
+  { const { context, page } = await session('insurer@example.test');
+    await go(page, base + '/claims'); let t = await text(page);
+    check('the insurer now sees the claim', t.includes('AB10XYZ'), t.slice(0, 400));
+    await go(page, base + claimUrl); t = await text(page);
+    check('the insurer sees the full report including photos', t.includes('Driver has a sore neck') && t.includes('damage.png'), t.slice(0, 500));
+    check('the insurer does not see the fleet\'s internal review note', !t.includes('Photos and details look complete.'));
+    await page.fill('input[name=ref]', 'EM-77123'); await page.click('button:has-text("Start review")'); await page.waitForTimeout(1500);
+    await page.fill('textarea[name=question]', 'Please send the dashcam footage.'); await page.click('button:has-text("Send question")'); await page.waitForTimeout(1500); t = await text(page);
+    check('the insurer can ask for more information and the claim waits for the fleet', (await calls()).some(c => c.rpc === 'request_claim_info') && /Waiting for|Awaiting/i.test(t), t.slice(0, 500));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + claimUrl); let t = await text(page);
+    check('the fleet sees the insurer\'s question under the claim', t.includes('Please send the dashcam footage.'), t.slice(0, 600));
+    await page.fill('textarea[name=answer]', 'Footage attached by email to the claims handler.'); await page.click('button:has-text("Send answer to the insurer")'); await page.waitForTimeout(1500);
+    check('the fleet answers and the claim returns to review', (await calls()).some(c => c.rpc === 'respond_claim_request'));
+    await context.close(); }
+  { const { context, page } = await session('insurer@example.test');
+    await go(page, base + claimUrl); let t = await text(page);
+    check('the insurer sees the answer', t.includes('Footage attached by email'), t.slice(0, 500));
+    await page.click('summary:has-text("Close this claim")'); await page.selectOption('select[name=outcome]', 'settled'); await page.fill('textarea[name=note]', 'Settled with the other party\'s insurer.'); await page.click('button:has-text("Close claim")'); await page.waitForTimeout(1500); t = await text(page);
+    check('the insurer closes the claim with an outcome', (await calls()).some(c => c.rpc === 'close_claim' && c.body.p_outcome === 'settled') && /Closed/.test(t), t.slice(0, 400));
+    check('a closed claim can be reopened by the insurer', (await page.locator('button:has-text("Reopen")').count()) === 1);
+    // insurer logs a claim the fleet did not report
+    await go(page, base + '/claims/new'); t = await text(page);
+    await page.selectOption('select[name=fleet]', '20000000-0000-4000-8000-000000000001'); await page.fill('input[name=registration]', 'AB11XYZ');
+    await page.fill('input[name=date]', '2026-10-20'); await page.fill('input[name=time]', '09:15'); await page.fill('input[name=location]', 'Car park, Leeds'); await page.fill('textarea[name=description]', 'Third party reported a scrape on the offside wing.');
+    await pick(page, 'injured', 'no'); await pick(page, 'police', 'no');
+    await page.click('button.primary'); await urlHas(page, /\/claims\/[0-9a-f-]{36}/); await page.waitForLoadState('networkidle');
+    check('the insurer can log a claim directly against a fleet', (await calls()).some(c => c.rpc === 'log_insurer_claim' && c.body.p_registration === 'AB11XYZ'));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + '/claims'); const t = await text(page);
+    check('the fleet is told a claim has been logged by the insurer', /logged by your insurer/i.test(t) && t.includes('AB11XYZ'), t.slice(0, 700));
+    await context.close(); }
+  { const { context, page } = await session('driver@example.test', { width: 390, height: 800 });
+    await go(page, base + '/claims/new');
+    check('the report form has no horizontal scroll on a phone', await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     await context.close(); }
 
   // ---- account with no membership

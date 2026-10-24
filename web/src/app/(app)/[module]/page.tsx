@@ -4,7 +4,6 @@ import { getContext, homeFor } from '@/lib/data';
 
 const planned: Record<string, [string, string]> = {
   drivers: ['Drivers & licences', 'Driver records, documents and licence-check permissions.'],
-  claims: ['Claims / FNOL', 'Incident reporting, photos, third-party details and shared claim progress.'],
 };
 
 export default async function Planned({ params }: { params: Promise<{ module: string }> }) {
