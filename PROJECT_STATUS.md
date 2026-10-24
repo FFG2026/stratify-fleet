@@ -236,6 +236,12 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 
 **Suggested order:** (1) organisation and policy creation with first-admin invite, including change-of-insurer and policy renewal; (3) rates and billing rules screen; (4)-(5) driver move/switch-off fixes; (6) password reset, leaked-password protection and two-factor for admins; (7) email; then the rest.
 
+## Organisation onboarding (hole A from the workflow sweep) — built, works through UI, backend and DB
+- Platform admins create insurers; platform admins and an insurer's own admins create that insurer's customers. Each creation invites the first administrator (and can create a temporary login). Duplicate names refused per kind.
+- Customer page (`/organisations/[id]`): add policy, set a policy's last day, renew (moves every vehicle on cover to the new policy with no gap; each keeps its original "added to portal" time via `coverage_periods.first_recorded_at`), optional daily rate at renewal.
+- Platform only: move a customer to another insurer — refused while it has a live policy, vehicle on cover or open claim. The old insurer loses sight of that customer's history immediately. Everything is audited.
+- Tests: `supabase/tests/org_onboarding.sql` (13 checks, rolled back); e2e 141/141.
+- Assumption to review: insurer admins can create customers and policies for their own insurer only.
 ## Maintenance bookings (24 Oct 2026)
 - Fleet CRM Maintenance now follows booked → checked in → work underway → ready to collect → collected/completed, plus cancellation. The board, task list and vehicle record share the workflow. Existing maintenance tasks can be set up as bookings with a garage and dates; otherwise their availability behaviour is retained.
 - Booking details: active fleet garage contact, appointment/expected-return dates, estimated and actual cost, notes, explicit off-road flag and an awaiting-approval flag. Approval is a work flag managed by CRM editors, not a separate financial authorisation role. Invoices are private fleet documents linked by fleet, vehicle and task; uploads use the existing 4 MB/type restrictions.
