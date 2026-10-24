@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getContext, canChange, getCoverActivity, orgName } from '@/lib/data';
+import { getContext, canChange, getCoverActivity, orgName, isDriverOnly } from '@/lib/data';
 import { PageHeader, LinkButton, Badge, Notice } from '@/components/ui';
 import { AddVehicleForm, RemoveVehicleForm } from '@/components/CoverForms';
 import { londonDateTime, today } from '@/lib/dates';
@@ -11,6 +11,7 @@ type SP = { mode?: string; policy?: string; rq?: string };
 export default async function Changes({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (isDriverOnly(ctx)) redirect('/driver');
   const sp = await searchParams;
   const mode = sp.mode === 'remove' ? 'remove' : 'add';
   const allowed = canChange(ctx);

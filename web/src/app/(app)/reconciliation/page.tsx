@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getContext, canGenerate, getReport, getReportHistory, getMonthPreview, demoPreview, orgName } from '@/lib/data';
+import { getContext, canGenerate, getReport, getReportHistory, getMonthPreview, demoPreview, orgName, isDriverOnly } from '@/lib/data';
 import { PageHeader, Badge, Notice, Pagination } from '@/components/ui';
 import { MonthPicker, ParamSelect } from '@/components/ParamSelect';
 import { GenerateForm, PrintButton } from '@/components/ReportControls';
@@ -13,6 +13,7 @@ type Row = { policy_id: string; registration: string; days: number };
 export default async function Reconciliation({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (isDriverOnly(ctx)) redirect('/driver');
   const sp = await searchParams;
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(sp.month ?? '') ? sp.month! : ctx.demo ? '2026-09' : today().slice(0, 7);
   const policy = sp.policy && ctx.policies.some(p => p.id === sp.policy) ? sp.policy : '';

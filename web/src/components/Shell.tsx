@@ -25,7 +25,7 @@ export function Sidebar({ items, planned }: { items: NavItem[]; planned: NavItem
       <nav id="workspace-navigation" aria-label="Main navigation">
         <div className="nav-label">Workspace</div>
         {items.map(link)}
-        <div className="nav-label expand-label">Expand your workspace</div>
+        {planned.length > 0 && <div className="nav-label expand-label">Expand your workspace</div>}
         {planned.map(link)}
       </nav>
       <div className="sidebar-footer"><strong>Designed for the road ahead.</strong><br />Fleet insurance, connected.<br /><span>STRATIFY PLATFORM · DEVELOPMENT</span></div>

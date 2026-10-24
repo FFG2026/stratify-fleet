@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getContext, fleetRegister } from '@/lib/data';
+import { getContext, fleetRegister, isDriverOnly } from '@/lib/data';
 import { PageHeader, LinkButton, FleetTable, Pagination, Notice } from '@/components/ui';
 import { ParamSelect } from '@/components/ParamSelect';
 
@@ -8,6 +8,7 @@ type SP = { q?: string; status?: string; policy?: string; offset?: string };
 export default async function Fleet({ searchParams }: { searchParams: Promise<SP> }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (isDriverOnly(ctx)) redirect('/driver');
   const sp = await searchParams;
   let error = '';
   let page = { rows: [] as Awaited<ReturnType<typeof fleetRegister>>['rows'], total: 0, offset: 0, limit: 25 };

@@ -158,3 +158,10 @@ Built alongside the live portal; **nothing deployed and the live site is untouch
 - Needs `SUPABASE_SERVICE_ROLE_KEY` as a server-only Vercel variable. Without it the password field reports that login creation is not set up; the invite-only path still works. The key is read only in `web/src/lib/admin-auth.ts` (server-only) and is never sent to the browser.
 - Supabase "leaked password protection" is off on the dev project (advisor warning); enable it under Auth settings (Pro plan feature).
 - Migration `20261024070000_member_login_audit.sql` applied to the dev project.
+
+## Driver workspace (24 Oct 2026)
+- A person whose only role is `driver` gets a separate workspace: menu is Driver dashboard, Drivers & licences, Claims / FNOL. They are redirected away from the fleet dashboard, register, manage cover, reconciliation and users.
+- Drivers have no direct read access to vehicles or cover (verified in the dev database: 0 rows). They see only what `my_cover()` returns: their own assignments and the cover periods on those vehicles that overlap them.
+- New table `vehicle_assignments` (RLS: select only; writes through `assign_driver` / `end_assignment`, which need `coverage.add` on the fleet, require the person to be an active driver there, and write audit entries). Migration `20261024090000_driver_assignments.sql`, applied to the dev project.
+- Fleet administrators and managers assign drivers on the Drivers & licences screen (driver, registration, from date; "End today" ends an assignment). Backdated assignment dates are allowed because assignment is not cover; cover dates come only from the coverage records.
+- Drivers & licences (licence records) and Claims / FNOL are still planned modules; drivers see the roadmap page for each.
