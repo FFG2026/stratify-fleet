@@ -162,6 +162,69 @@ export async function getAssignments(fleet: string) {
   return rest<Assignment[]>('/rest/v1/vehicle_assignments?select=id,user_id,vehicle_id,assigned_from,assigned_to,vehicle:vehicles(registration,make_model)&fleet_id=eq.' + checkedId(fleet) + '&order=assigned_from.desc&limit=200');
 }
 
+// ---- driver records
+export type DriverProfile = { user_id: string; fleet_id: string; full_name: string; date_of_birth: string | null; licence_number: string | null; phone: string | null; no_claims_declared_at: string | null; no_convictions_declared_at: string | null; updated_at: string };
+export type DriverDoc = { id: string; user_id: string; kind: string; file_name: string; content_type: string; size_bytes: number; uploaded_at: string; expires_on: string | null };
+export type DriverRecord = { id: string; user_id: string; kind: 'employment' | 'claim' | 'conviction'; title: string; detail: string | null; start_date: string; end_date: string | null; amount: number | null; at_fault: boolean | null; points: number | null };
+export type DriverConsent = { user_id: string; kind: string; given: boolean; version: string; recorded_at: string };
+export type DriverFile = { profile: DriverProfile | null; docs: DriverDoc[]; consents: DriverConsent[]; records: DriverRecord[] };
+const docCols = 'id,user_id,kind,file_name,content_type,size_bytes,uploaded_at,expires_on';
+const recCols = 'id,user_id,kind,title,detail,start_date,end_date,amount,at_fault,points';
+
+// One driver's whole file. Row-level security limits it to the driver themself, their fleet and the fleet's insurers.
+export async function getDriverFile(userId: string): Promise<DriverFile> {
+  const u = checkedId(userId);
+  const [profiles, docs, consents, records] = await Promise.all([
+    rest<DriverProfile[]>('/rest/v1/driver_profiles?select=*&user_id=eq.' + u),
+    rest<DriverDoc[]>(`/rest/v1/driver_documents?select=${docCols}&user_id=eq.${u}&order=uploaded_at.desc&limit=100`),
+    rest<DriverConsent[]>('/rest/v1/driver_consent_current?select=user_id,kind,given,version,recorded_at&user_id=eq.' + u),
+    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=eq.${u}&order=start_date.desc&limit=200`)
+  ]);
+  return { profile: profiles[0] ?? null, docs, consents, records };
+}
+
+export type DriverRow = DriverProfile & { docKinds: string[]; licenceCheck: boolean; dataSharing: boolean; jobs: DriverRecord[]; claims: number; convictions: number };
+const safeName = (q: string) => q.replace(/[^\p{L}\p{N} '.-]/gu, '').trim().slice(0, 60);
+export async function listDrivers(params: { q?: string; fleet?: string; offset?: number; limit?: number }): Promise<{ rows: DriverRow[]; total: number }> {
+  const limit = params.limit ?? 25, offset = params.offset ?? 0;
+  const query = new URLSearchParams({ select: '*', order: 'full_name.asc', offset: String(offset), limit: String(limit) });
+  const q = safeName(params.q ?? '');
+  if (q) query.set('full_name', 'ilike.*' + q + '*');
+  if (params.fleet) query.set('fleet_id', 'eq.' + checkedId(params.fleet));
+  const page = await rest<{ rows: DriverProfile[]; total: number }>('/rest/v1/driver_profiles?' + query, { count: true });
+  if (!page.rows.length) return { rows: [], total: page.total };
+  const ids = '(' + page.rows.map(p => checkedId(p.user_id)).join(',') + ')';
+  const [docs, consents, records] = await Promise.all([
+    rest<{ user_id: string; kind: string }[]>('/rest/v1/driver_documents?select=user_id,kind&user_id=in.' + ids + '&limit=1000'),
+    rest<DriverConsent[]>('/rest/v1/driver_consent_current?select=user_id,kind,given,version,recorded_at&user_id=in.' + ids),
+    rest<DriverRecord[]>(`/rest/v1/driver_records?select=${recCols}&user_id=in.${ids}&limit=2000`)
+  ]);
+  const rows = page.rows.map(p => ({
+    ...p,
+    docKinds: docs.filter(d => d.user_id === p.user_id).map(d => d.kind),
+    licenceCheck: consents.some(c => c.user_id === p.user_id && c.kind === 'licence_check' && c.given),
+    dataSharing: consents.some(c => c.user_id === p.user_id && c.kind === 'data_sharing' && c.given),
+    jobs: records.filter(r => r.user_id === p.user_id && r.kind === 'employment'),
+    claims: records.filter(r => r.user_id === p.user_id && r.kind === 'claim').length,
+    convictions: records.filter(r => r.user_id === p.user_id && r.kind === 'conviction').length
+  }));
+  return { rows, total: page.total };
+}
+export async function suggestDrivers(q: string, fleet?: string) {
+  const name = safeName(q);
+  if (name.length < 2) return [];
+  const query = new URLSearchParams({ select: 'user_id,full_name,fleet_id', order: 'full_name.asc', limit: '8', full_name: 'ilike.*' + name + '*' });
+  if (fleet) query.set('fleet_id', 'eq.' + checkedId(fleet));
+  return rest<{ user_id: string; full_name: string; fleet_id: string }[]>('/rest/v1/driver_profiles?' + query);
+}
+export async function getDriverDocument(id: string) {
+  const rows = await rest<{ id: string; user_id: string; fleet_id: string; storage_path: string; file_name: string; content_type: string }[]>(
+    '/rest/v1/driver_documents?select=id,user_id,fleet_id,storage_path,file_name,content_type&id=eq.' + checkedId(id));
+  return rows[0] ?? null;
+}
+export const canViewDrivers = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims', 'fleet_admin', 'fleet_manager'].includes(r));
+export const driverFleetOf = (ctx: Context) => ctx.memberships.find(m => m.active && m.role === 'driver')?.organisation_id ?? null;
+
 // ---- members
 export async function getMembers(org: string): Promise<Member[]> {
   return rpc<Member[]>('list_members', { p_org: checkedId(org) });
