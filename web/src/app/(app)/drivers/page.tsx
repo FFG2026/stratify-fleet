@@ -10,6 +10,7 @@ import { Checklist, Documents, History, Permissions, LicenceCheckDriver } from '
 import { completeness, historyGaps } from '@/lib/drivers';
 import { today } from '@/lib/dates';
 import Planned from '../[module]/page';
+import { demoDriverList } from '@/lib/demo-drivers';
 
 type SP = { org?: string; fleet?: string; q?: string; offset?: string; view?: string; co?: string };
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
@@ -18,7 +19,8 @@ export default async function Drivers({ searchParams }: { searchParams: Promise<
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   const sp = await searchParams;
-  if (ctx.demo || (!isDriverOnly(ctx) && !canViewDrivers(ctx))) return Planned({ params: Promise.resolve({ module: 'drivers' }) });
+  if (ctx.demo) return <Directory ctx={ctx} sp={sp} />;
+  if (!isDriverOnly(ctx) && !canViewDrivers(ctx)) return Planned({ params: Promise.resolve({ module: 'drivers' }) });
   if (isDriverOnly(ctx)) return <MyFile ctx={ctx} />;
   return <Directory ctx={ctx} sp={sp} />;
 }
@@ -84,13 +86,14 @@ async function Directory({ ctx, sp }: { ctx: NonNullable<Awaited<ReturnType<type
   }
   const offset = Math.max(0, Number(sp.offset) || 0), q = (sp.q ?? '').slice(0, 60);
   let data = { rows: [] as Awaited<ReturnType<typeof listDrivers>>['rows'], total: 0 }, error = '';
-  try { data = await listDrivers({ q, fleet: fleet || undefined, offset }); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load drivers.'; }
+  try { data = ctx.demo ? demoDriverList({ q, fleet: fleet || undefined, offset }) : await listDrivers({ q, fleet: fleet || undefined, offset }); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load drivers.'; }
   const base = new URLSearchParams(); if (q) base.set('q', q); if (fleet) base.set('fleet', fleet);
   const t = today();
   return (
     <>
       {header}
       {tabs}
+      {ctx.demo && <Notice>Fictional demonstration drivers. Example documents and licence-check results are illustrative; saving and live checks are disabled.</Notice>}
       <Notice>Documents and history are provided by the drivers themselves. Opening a document is recorded in the audit trail. Recording a licence-check permission is not a licence check: the portal does not check licences with the DVLA yet.</Notice>
       {insurer && <p className="subtext"><Link prefetch={false} className="textbtn" href="/drivers">← All companies</Link> · Drivers at <strong>{fleets.find(f => f.id === fleet)?.name}</strong></p>}
       <div className="filters">

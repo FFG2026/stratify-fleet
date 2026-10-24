@@ -4,6 +4,7 @@ import { getContext, getDriverFile, canViewDrivers, isDriverOnly, orgName } from
 import { PageHeader, Notice, LinkButton } from '@/components/ui';
 import { Checklist, Documents, History, Permissions, LicenceCheckStaff } from '@/components/DriverFile';
 import { checkedId } from '@/lib/ids';
+import { demoDriverFile } from '@/lib/demo-drivers';
 
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
 
@@ -11,16 +12,17 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   if (isDriverOnly(ctx)) redirect('/drivers');
-  if (!canViewDrivers(ctx)) redirect('/');
+  if (!ctx.demo && !canViewDrivers(ctx)) redirect('/');
   const { id } = await params;
   try { checkedId(id); } catch { notFound(); }
-  const file = await getDriverFile(id).catch(() => null);
+  const file = ctx.demo ? demoDriverFile(id) : await getDriverFile(id).catch(() => null);
   // Row-level security returns nothing for drivers this person may not see; that looks the same as a missing driver.
   if (!file || !file.profile) notFound();
   const p = file.profile;
   return (
     <>
       <PageHeader title={p.full_name} subtitle={`Driver at ${orgName(ctx, p.fleet_id)}`} actions={<LinkButton href="/drivers">← All drivers</LinkButton>} />
+      {ctx.demo && <Notice>Fictional driver file. Example documents cannot be downloaded, and no live licence check has been performed.</Notice>}
       <Notice>Provided by the driver. Opening a document is recorded in the audit trail. Recording a licence-check permission is not a licence check: the portal does not check licences with the DVLA yet.</Notice>
       <section className="panel"><div className="panel-body">
         <div className="cardhead"><h2>Details</h2></div>
@@ -32,9 +34,9 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
         </dl>
       </div></section>
       <Checklist file={file} />
-      <Documents file={file} editable={false} />
+      <Documents file={file} editable={false} demo={ctx.demo} />
       <Permissions file={file} editable={false} />
-      <LicenceCheckStaff file={file} driver={p.user_id} />
+      <LicenceCheckStaff file={file} driver={p.user_id} demo={ctx.demo} />
       <History file={file} editable={false} />
       <p><Link prefetch={false} className="textbtn" href="/drivers">← Back to all drivers</Link></p>
     </>

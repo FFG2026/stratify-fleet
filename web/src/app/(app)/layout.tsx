@@ -40,12 +40,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
-  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
+  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
   if (!driver && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
-      <Sidebar items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && canViewDrivers(ctx)))} />
+      <Sidebar items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
       <div className="main">
         <header className="topbar">
           {driver ? <span /> : <Suspense fallback={null}>
