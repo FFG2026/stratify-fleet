@@ -23,14 +23,14 @@ export function Checklist({ file }: { file: DriverFile }) {
   );
 }
 
-function DocList({ file, kind, editable }: { file: DriverFile; kind: string; editable: boolean }) {
+function DocList({ file, kind, editable, demo=false }: { file: DriverFile; kind: string; editable: boolean; demo?:boolean }) {
   const docs = file.docs.filter(d => d.kind === kind);
   if (!docs.length) return <p className="subtext">Nothing uploaded yet.</p>;
   return (
     <ul className="doclist">
       {docs.map(d => (
         <li key={d.id}>
-          <a href={`/drivers/file/${d.id}`} target="_blank" rel="noopener noreferrer">{d.file_name}</a>
+          {demo ? <span>{d.file_name} · Example record</span> : <a href={`/drivers/file/${d.id}`} target="_blank" rel="noopener noreferrer">{d.file_name}</a>}
           <span className="subtext"> · {size(d.size_bytes)} · uploaded {londonShortDate(d.uploaded_at)}{d.expires_on ? ` · expires ${day(d.expires_on)}` : ''}</span>
           {editable && <RemoveButton kind="document" id={d.id} label={`Remove ${d.file_name}`} />}
         </li>
@@ -39,7 +39,7 @@ function DocList({ file, kind, editable }: { file: DriverFile; kind: string; edi
   );
 }
 
-export function Documents({ file, editable }: { file: DriverFile; editable: boolean }) {
+export function Documents({ file, editable, demo=false }: { file: DriverFile; editable: boolean; demo?:boolean }) {
   return (
     <section className="panel"><div className="panel-body">
       <div className="cardhead"><h2>Documents</h2></div>
@@ -48,7 +48,7 @@ export function Documents({ file, editable }: { file: DriverFile; editable: bool
         {documentKinds.map(k => (
           <div key={k.kind} className="doc-card">
             {editable ? <UploadForm kind={k.kind} label={k.label} hint={k.hint} withExpiry={k.kind === 'right_to_work' || k.kind === 'licence_front'} /> : <div><strong>{k.label}</strong></div>}
-            <DocList file={file} kind={k.kind} editable={editable} />
+            <DocList file={file} kind={k.kind} editable={editable} demo={demo} />
           </div>
         ))}
       </div>
@@ -164,7 +164,8 @@ export function LicenceCheckDriver({ file }: { file: DriverFile }) {
 }
 
 // The staff side: what to copy, a one-click link to the DVLA, and a form to record what it showed.
-export function LicenceCheckStaff({ file, driver }: { file: DriverFile; driver: string }) {
+export function LicenceCheckStaff({ file, driver, demo=false }: { file: DriverFile; driver: string; demo?:boolean }) {
+  if(demo)return <section className="panel"><div className="panel-body"><h2>Licence check history</h2><Notice>Fictional results for demonstration only. Live checks and recording results are disabled in the demo.</Notice><CheckHistory file={file}/></div></section>;
   const allowed = file.consents.some(c => c.kind === 'licence_check' && c.given);
   const eight = lastEight(file.profile?.licence_number ?? null);
   const code = file.codes[0];
