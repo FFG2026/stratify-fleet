@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getContext, canGenerate, getReport, getReportHistory, demoPreview, orgName } from '@/lib/data';
+import { getContext, canGenerate, getReport, getReportHistory, getMonthPreview, demoPreview, orgName } from '@/lib/data';
 import { PageHeader, Badge, Notice, Pagination } from '@/components/ui';
 import { MonthPicker, ParamSelect } from '@/components/ParamSelect';
 import { GenerateForm, PrintButton } from '@/components/ReportControls';
@@ -35,6 +35,10 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
     for (const l of saved.lines) { const k = l.policy_id + ':' + l.registration; const hit = map.get(k); if (hit) hit.days += l.days; else map.set(k, { policy_id: l.policy_id, registration: l.registration, days: l.days }); }
     rows = [...map.values()];
   } else if (ctx.demo) rows = demoPreview(month, policy || undefined);
+  else {
+    try { rows = await getMonthPreview(month, policy || undefined); }
+    catch (e) { error = error || (e instanceof Error ? e.message : 'Unable to load the live preview.'); }
+  }
   const shown = saved ? saved.report.month_start.slice(0, 7) : month;
   const base = new URLSearchParams({ month }); if (policy) base.set('policy', policy); if (sp.report) base.set('report', sp.report);
   const hbase = new URLSearchParams({ month }); if (policy) hbase.set('policy', policy);
@@ -42,7 +46,7 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader crumb="FINANCE" title="Reconciliation" subtitle="Coverage reconciled down to the vehicle." actions={<PrintButton />} />
-      <Notice><strong>Provisional report.</strong> {saved ? `Saved database report ${saved.report.id}. Rules snapshot: ${saved.report.rules_source}.` : 'Select a policy and generate a report, or reopen a saved report below. Reports retain the rules and rates used at generation.'} Saved reports follow their stored rules snapshot. The date-only preview includes the start date and excludes the removal date. Report finalisation is not available.</Notice>
+      <Notice><strong>Provisional report.</strong> {saved ? `Saved database report ${saved.report.id}. Rules snapshot: ${saved.report.rules_source}.` : ctx.demo ? 'Select a policy and generate a report, or reopen a saved report below. Reports retain the rules and rates used at generation.' : 'Live preview from the vehicle register: every vehicle with cover in the month, counted by date (start date included, removal date excluded). Choose a policy and generate a saved report to apply the insurer\'s stored rules and rates.'} Saved reports follow their stored rules snapshot. The date-only preview includes the start date and excludes the removal date. Report finalisation is not available.</Notice>
       {error && <Notice alert>{error}</Notice>}
       <div className="filters">
         <ParamSelect name="policy" label="Policy" value={policy} options={[{ value: '', label: 'All authorised policies' }, ...ctx.policies.map(p => ({ value: p.id, label: p.reference }))]} />
@@ -73,7 +77,7 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
             ))}
           </tbody>
         </table></div>
-        {!rows.length && <div className="empty">{!ctx.demo && !saved ? 'Generate or open a saved report to view insured days.' : 'No insured days in this month.'}</div>}
+        {!rows.length && <div className="empty">No vehicles had cover in this month.</div>}
         <Pagination total={rows.length} offset={offset} base={base} />
       </div>
       {ctx.demo ? (
