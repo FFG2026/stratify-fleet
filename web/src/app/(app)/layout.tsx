@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { getContext, canChange, canManageUsers, isPlatform, isInsurerSide, isDriverOnly, orgName } from '@/lib/data';
+import { getContext, canViewDrivers, canManageUsers, isPlatform, isInsurerSide, isDriverOnly, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -34,11 +34,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: '/drivers', label: 'Drivers & licences', icon: '◎' },
     { href: '/claims', label: 'Claims / FNOL', icon: '⚑' }
   ];
-  const items = driver ? driverNav : nav.filter(i => (!i.staff || canChange(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
+  const items = driver ? driverNav : nav.filter(i => (!i.staff || canViewDrivers(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
-      <Sidebar items={items} planned={driver ? [] : planned.filter(p => !(p.href === '/drivers' && canChange(ctx)))} />
+      <Sidebar items={items} planned={driver ? [] : planned.filter(p => !(p.href === '/drivers' && canViewDrivers(ctx)))} />
       <div className="main">
         <header className="topbar">
           {driver ? <span /> : <Suspense fallback={null}>

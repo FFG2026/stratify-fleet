@@ -4,7 +4,7 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: {
     // Server actions only accept requests from our own origins.
-    serverActions: { allowedOrigins: ['stratifyfleet.co.uk', 'www.stratifyfleet.co.uk'] }
+    serverActions: { bodySizeLimit: '4.5mb', allowedOrigins: ['stratifyfleet.co.uk', 'www.stratifyfleet.co.uk'] }
   }
 };
 export default nextConfig;

@@ -42,6 +42,7 @@ async function session(email, viewport = { width: 1280, height: 900 }, pw = 'pw'
   return { context, page };
 }
 // Pages stream in; wait for the network to settle so we read the finished page, not the loading state.
+const getFile = (page, path) => page.evaluate(async u => { const r = await fetch(u, { credentials: 'same-origin', redirect: 'manual' }); return { status: r.status, type: r.headers.get('content-type'), len: (await r.arrayBuffer()).byteLength }; }, path);
 const urlHas = (page, pattern) => page.waitForFunction(([src, glob]) => glob ? location.pathname.endsWith(src) : new RegExp(src).test(location.pathname + location.search), typeof pattern === 'string' ? [pattern.replace('**', ''), true] : [pattern.source, false], { timeout: 20000 });
 const go = async (page, url) => { await page.goto(url); await page.waitForLoadState('networkidle'); };
 const text = async page => {
@@ -184,6 +185,7 @@ try {
     await context.close(); }
 
   // ---- driver
+  let t2 = '';
   { const { context, page } = await session('driver@example.test');
     check('a driver lands on the driver dashboard', new URL(page.url()).pathname === '/driver', page.url());
     const nav = await page.locator('nav a').allInnerTexts();
@@ -192,7 +194,25 @@ try {
     check('driver sees the vehicle on cover now with dates, and earlier cover', t.includes('AB10XYZ') && t.includes('Ford Transit') && t.includes('01/01/2026') && t.includes('no end date') && t.includes('Previously on cover') && t.includes('ZZ99OLD') && t.includes('01/03/2026'), t.slice(0, 900));
     await go(page, base + '/fleet'); check('a driver cannot open the fleet register', new URL(page.url()).pathname === '/driver', page.url());
     await go(page, base + '/reconciliation'); check('a driver cannot open reconciliation', new URL(page.url()).pathname === '/driver', page.url());
-    await go(page, base + '/drivers'); check('a driver sees the planned licences page, not assignments', (await text(page)).includes('PLANNED MODULE') && !(await text(page)).includes('Assign a driver'));
+    await go(page, base + '/drivers'); t2 = await text(page);
+    check('a driver sees their own file: details, documents, permissions and history', ['Your file', 'Your details', 'Documents', 'Permissions', 'Job history, last 3 years', 'Claims history', 'Motoring convictions', 'licence-front.png', 'Acme Haulage', 'Rear-end collision'].every(s => t2.includes(s)) && !t2.includes('Danny Rival') && !t2.includes('Assign a driver'), t2.slice(0, 700));
+    check('the file checklist shows progress', /\d of 8 complete/.test(t2));
+    await page.setInputFiles('input[aria-label="Right to work: choose a file"]', { name: 'rtw.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64') });
+    await page.locator('form.upload', { hasText: 'Right to work' }).locator('button').click(); await page.waitForSelector('text=Uploaded. Your fleet and its insurers can now see it.');
+    { const cs = await calls();
+      check('an upload goes to private storage in the driver\'s own folder, then is recorded', cs.some(c => c.storage === 'POST' && c.path.startsWith('driver-documents/20000000-0000-4000-8000-000000000001/a0000000-0000-4000-8000-000000000006/') && c.path.endsWith('.png')) && cs.some(c => c.rpc === 'add_driver_document' && c.body.p_kind === 'right_to_work' && c.body.p_type === 'image/png'), JSON.stringify(cs.filter(c => c.storage || c.rpc === 'add_driver_document'))); }
+    await page.setInputFiles('input[aria-label="Other documents: choose a file"]', { name: 'bad.png', mimeType: 'image/png', buffer: Buffer.from('<script>alert(1)</script>') });
+    await page.locator('form.upload', { hasText: 'Other documents' }).locator('button').click(); await page.waitForSelector('text=Upload a photo (JPG, PNG or WebP) or a PDF.');
+    check('a file that is not really a picture or PDF is refused', !(await calls()).some(c => c.rpc === 'add_driver_document' && c.body.p_kind === 'other'));
+    await page.locator('input[aria-label="Sharing my details"]').click(); await page.waitForSelector('text=Permission recorded');
+    check('ticking a permission records it with the wording agreed to', (await calls()).some(c => c.rpc === 'record_driver_consent' && c.body.p_kind === 'data_sharing' && c.body.p_given === true && c.body.p_version === 'v1' && /insurers of that fleet/.test(c.body.p_statement)));
+    await page.fill('form:has(input[value=employment]) input[name=title]', 'Bluebell Couriers'); await page.fill('form:has(input[value=employment]) input[name=start]', '2020-02-01'); await page.fill('form:has(input[value=employment]) input[name=end]', '2021-12-31');
+    await page.locator('form:has(input[value=employment]) button:has-text("Add")').click(); await page.waitForSelector('text=Added.');
+    check('adding a job calls add_driver_record', (await calls()).some(c => c.rpc === 'add_driver_record' && c.body.p_kind === 'employment' && c.body.p_title === 'Bluebell Couriers'));
+    await page.click('button[aria-label="Remove licence-front.png"]'); await page.waitForTimeout(1500);
+    check('removing a file deletes it from storage', (await calls()).some(c => c.rpc === 'remove_driver_document') && (await calls()).some(c => c.storage === 'DELETE'));
+    await go(page, base + '/drivers/a0000000-0000-4000-8000-000000000006'); check('a driver cannot open the staff view of a driver', new URL(page.url()).pathname === '/drivers', page.url());
+    const direct = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000002'); check('a driver cannot fetch another driver\'s document', direct.status === 404, String(direct.status));
     await context.close(); }
 
   // ---- fleet customer
@@ -207,6 +227,16 @@ try {
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('own row is marked "This is you" and has no controls', t.includes('This is you'), t.slice(-300));
     await go(page, base + '/drivers'); t = await text(page);
+    check('fleet staff see their own drivers but not another fleet\'s', t.includes('Dana Driver') && !t.includes('Danny Rival') && /licence check permission/i.test(t) && t.includes('Given'), t.slice(0, 700));
+    await page.fill('input[name=q]', 'dan'); await page.waitForSelector('#driver-suggestions a:has-text("Dana Driver")');
+    check('typing part of a name suggests matching drivers', (await page.locator('#driver-suggestions a').allInnerTexts()).join('|') === 'Dana Driver');
+    await page.click('#driver-suggestions a:has-text("Dana Driver")'); await urlHas(page, /\/drivers\/a0000000/);
+    t = await text(page);
+    check('the driver detail shows details, documents, permissions and history to staff', ['Dana Driver', 'DRIVE803148DA9AB', 'licence-front.png', 'Given', 'Acme Haulage', 'Rear-end collision', 'Declared none'].every(s => t.includes(s)) && !(await page.locator('form.upload').count()), t.slice(0, 800));
+    const doc = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000001');
+    check('staff can open a driver document and it is audited first', doc.status === 200 && /image\/png/.test(doc.type || '') && (await calls()).some(c => c.rpc === 'log_driver_document_view'), String(doc.status));
+    const rival = await getFile(page, '/drivers/file/d1000000-0000-4000-8000-000000000002'); check('staff cannot open a document from a fleet they cannot see', rival.status === 404, String(rival.status));
+    await go(page, base + '/drivers?view=assignments'); t = await text(page);
     check('fleet staff see current driver assignments', t.includes('Assign a driver to a vehicle') && t.includes('driver@example.test') && t.includes('AB10XYZ') && t.includes('Current'), t.slice(0, 600));
     await page.selectOption('select[name=user]', { label: 'driver@example.test' }); await page.fill('input[name=registration]', 'ab10 xyz'); await page.click('button:has-text("Assign")');
     await page.waitForSelector('text=assigned. The driver can see it now');
