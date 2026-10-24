@@ -16,7 +16,7 @@ killListener(APP); killListener(FAKE); await new Promise(r => setTimeout(r, 500)
 const { server: fake } = await startFake(FAKE);
 const app = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-p', String(APP)], {
   cwd: new URL('../../', import.meta.url).pathname,
-  env: { ...process.env, SUPABASE_URL: `http://127.0.0.1:${FAKE}`, SUPABASE_PUBLISHABLE_KEY: 'test-publishable', NODE_ENV: 'production', DVLA_VES_API_KEY: '' },
+  env: { ...process.env, SUPABASE_URL: `http://127.0.0.1:${FAKE}`, SUPABASE_PUBLISHABLE_KEY: 'test-publishable', NODE_ENV: 'production', DVLA_VES_API_KEY: '', SUPABASE_SERVICE_ROLE_KEY: 'test-service-role' },
   stdio: ['ignore', 'pipe', 'pipe']
 });
 let appLog = ''; app.stdout.on('data', d => appLog += d); app.stderr.on('data', d => appLog += d);
@@ -27,16 +27,16 @@ const problems = [];
 let lastPage = null;
 const net = [];
 
-async function session(email, viewport = { width: 1280, height: 900 }) {
+async function session(email, viewport = { width: 1280, height: 900 }, pw = 'pw') {
   const context = await browser.newContext({ viewport, acceptDownloads: true });
   const page = await context.newPage(); lastPage = page;
   page.on('console', m => { if (['error', 'warning'].includes(m.type()) && !/Failed to load resource.*404/.test(m.text())) problems.push(`[${email}] console ${m.type()}: ${m.text()}`); });
   page.on('response', r => net.push(`${r.status()} ${r.request().method()} ${r.url().replace(base, '')}`));
   page.on('requestfailed', r => net.push(`FAILED ${r.method()} ${r.url().replace(base, '')} ${r.failure()?.errorText}`));
-  page.on('pageerror', e => problems.push(`[${email}] pageerror: ${e.message}`));
+  page.on('pageerror', e => problems.push(`[${email}] pageerror at ${page.url()}: ${e.message}`));
   await go(page, base + '/login');
   await page.fill('input[name=email]', email);
-  await page.fill('input[name=password]', 'pw');
+  await page.fill('input[name=password]', pw);
   await Promise.all([page.waitForURL(u => !['/login', '/'].includes(u.pathname), { waitUntil: 'commit' }), page.click('button.primary')]);
   await page.waitForLoadState('networkidle');
   return { context, page };
@@ -139,6 +139,15 @@ try {
     await page.fill('input[name=email]', 'New.Person@Example.com'); await page.selectOption('form.filters select[name=role]', 'fleet_manager');
     await page.click('button:has-text("Add person")'); await page.waitForSelector('text=Invitation saved');
     check('add person lower-cases the email and sends org and role', (await calls()).some(c => c.rpc === 'add_member' && c.body.p_email === 'new.person@example.com' && c.body.p_role === 'fleet_manager'));
+    await page.fill('input[name=email]', 'Temp.Login@Example.com'); await page.fill('input[name=password]', 'Temporary-pass-1'); await page.selectOption('form.filters select[name=role]', 'fleet_manager');
+    await page.click('button:has-text("Add person")'); await page.waitForSelector('text=Login created');
+    { const cs = await calls();
+      check('adding with a password creates a flagged login after add_member and records an audit entry', cs.some(c => c.admin === 'create_user' && c.body.email === 'temp.login@example.com' && c.body.app_metadata?.must_change_password === true && c.body.email_confirm === true) && cs.some(c => c.rpc === 'record_member_login' && c.body.p_email === 'temp.login@example.com') && JSON.stringify(cs).indexOf('Temporary-pass-1') === -1, JSON.stringify(cs.filter(c => c.admin)));
+      check('the page never shows the password back', !(await text(page)).includes('Temporary-pass-1')); }
+    await page.fill('input[name=email]', 'short@example.com'); await page.fill('input[name=password]', 'short'); await page.selectOption('form.filters select[name=role]', 'driver');
+    await page.click('button:has-text("Add person")');
+    await page.waitForFunction(() => document.querySelector('input[name=password]')?.validity?.tooShort === true || /at least 12/.test(document.body.innerText));
+    check('a short temporary password is refused', !(await calls()).some(c => c.body?.email === 'short@example.com'));
     await page.click('button:has-text("Cancel invitation")'); await page.waitForTimeout(500);
     check('cancel invitation calls revoke_invitation', (await calls()).some(c => c.rpc === 'revoke_invitation'));
 
@@ -163,6 +172,17 @@ try {
     check('insurer register excludes other insurers\' vehicles', t.includes('AB10XYZ') && !t.includes('EF10XYZ'));
     await context.close(); }
 
+  // ---- first sign-in with a temporary password
+  { const { context, page } = await session('temp.login@example.com', undefined, 'Temporary-pass-1');
+    check('a login with a temporary password is sent to choose its own', new URL(page.url()).pathname === '/change-password', page.url());
+    await page.goto(base + '/customer'); await page.waitForLoadState('networkidle'); check('the rest of the app is closed until the password is changed', new URL(page.url()).pathname === '/change-password', page.url());
+    await page.fill('input[name=password]', 'Temporary-pass-1'); await page.fill('input[name=again]', 'Temporary-pass-1'); await page.click('button.primary');
+    await page.waitForSelector('text=different from the temporary'); check('reusing the temporary password is refused', true);
+    await page.fill('input[name=password]', 'A-much-better-pass-9'); await page.fill('input[name=again]', 'A-much-better-pass-9'); await page.click('button.primary');
+    await page.waitForURL(u => u.pathname !== '/change-password'); await page.waitForLoadState('networkidle');
+    check('after choosing a password the person reaches the workspace', ['/customer', '/'].includes(new URL(page.url()).pathname) && !(await text(page)).includes('Choose your password'), page.url());
+    await context.close(); }
+
   // ---- fleet customer
   { const { context, page } = await session('customer@example.test');
     check('customer lands on the fleet dashboard', new URL(page.url()).pathname === '/customer', page.url());
@@ -170,8 +190,7 @@ try {
     check('customer sees only their own fleet', t.includes('Northbank Logistics') && !t.includes('Riverside Couriers') && !t.includes('Hilltop'), t.slice(-400));
     check('customer dashboard has no Customers box and its boxes are links', !(await page.locator('.stat-label:has-text("Customers")').count()) && await page.locator('a.stat-link:has-text("Scheduled additions")').getAttribute('href') === '/fleet?status=scheduled' && await page.locator('a.stat-link:has-text("Covered vehicles")').count() === 1);
     await go(page, base + '/insurer'); t = await text(page);
-    await page.goto(base + '/users'); check('fleet user sees no organisation picker on Users', await page.getByText('People in').count() === 1 && await page.locator('label:has-text("Organisation")').count() === 0);
-    await page.goto(base + '/customer');
+    await go(page, base + '/users'); check('fleet user sees no organisation picker on Users', await page.getByText('People in').count() === 1 && await page.locator('label:has-text("Organisation")').count() === 0);
     check('customer cannot use the insurer dashboard', t.includes('requires insurer or platform administrator'));
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('own row is marked "This is you" and has no controls', t.includes('This is you'), t.slice(-300));

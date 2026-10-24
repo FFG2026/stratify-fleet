@@ -52,17 +52,29 @@ export function startFake(port) {
     if (url.pathname === '/__reset') { calls.length = 0; return json(200, {}); }
     if (url.pathname === '/auth/v1/token') {
       const email = String(body?.email || '').toLowerCase(), u = users[email];
-      if (!u || body.password !== 'pw') return json(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
+      if (!u || body.password !== (u.pw || 'pw')) return json(400, { error: 'invalid_grant', error_description: 'Invalid login credentials' });
       const now = Math.floor(Date.now() / 1000);
       const jwt = 'x.' + Buffer.from(JSON.stringify({ sub: u.id, email, exp: now + 3600, role: 'authenticated', aud: 'authenticated' })).toString('base64url') + '.x';
       void jwt;
-      return json(200, { access_token: 'tok-' + email, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + email, user: { id: u.id, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } });
+      return json(200, { access_token: 'tok-' + email, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + email, user: { id: u.id, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: u.mustChange ? { must_change_password: true } : {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } });
+    }
+    if (url.pathname.startsWith('/auth/v1/admin/')) {
+      if (!/Bearer test-service-role$/.test(req.headers.authorization || '')) return json(401, { msg: 'bad key' });
+      if (req.method === 'POST' && url.pathname === '/auth/v1/admin/users') {
+        const email = String(body.email).toLowerCase();
+        if (users[email]) return json(422, { error_code: 'email_exists', msg: 'exists' });
+        calls.push({ admin: 'create_user', body: { ...body, password: '(hidden)' }, passwordLength: String(body.password).length });
+        users[email] = { id: 'a0000000-0000-4000-8000-0000000000' + String(50 + Object.keys(users).length), role: 'fleet_manager', org: ids.f1, see: [ids.f1], pw: body.password, mustChange: body.app_metadata?.must_change_password === true };
+        return json(200, { id: users[email].id });
+      }
+      if (req.method === 'PUT') { const hit = Object.values(users).find(x => url.pathname.endsWith('/' + x.id)); if (!hit) return json(404, { msg: 'no user' }); hit.mustChange = body.app_metadata?.must_change_password === true; calls.push({ admin: 'update_user', mustChange: hit.mustChange }); return json(200, { id: hit.id }); }
     }
     const token = (req.headers.authorization || '').replace('Bearer ', '');
     const found = byToken(token);
     if (url.pathname === '/auth/v1/user') {
       if (!found) return json(401, { message: 'invalid JWT' });
-      return json(200, { id: found[1].id, email: found[0], aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
+      if (req.method === 'PUT') { if (body.password === found[1].pw) return json(422, { error_code: 'same_password', message: 'New password should be different from the old password.' }); found[1].pw = body.password; calls.push({ admin: 'password_changed', as: found[0] }); }
+      return json(200, { id: found[1].id, email: found[0], aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: found[1].mustChange ? { must_change_password: true } : {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
     }
     if (url.pathname === '/auth/v1/logout') return json(204, {});
     if (!found) return json(401, { message: 'JWT expired' });

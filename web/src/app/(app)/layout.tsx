@@ -26,6 +26,7 @@ const planned: NavItem[] = [
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (ctx.user.mustChangePassword) redirect('/change-password');
   const items = nav.filter(i => (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (

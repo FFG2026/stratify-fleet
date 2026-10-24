@@ -8,7 +8,7 @@ export type Period = {
 };
 export type Page<T> = { rows: T[]; total: number; offset: number; limit: number };
 export type Context = {
-  user: { id: string; email: string };
+  user: { id: string; email: string; mustChangePassword?: boolean };
   demo: boolean;
   orgs: Org[];
   policies: Policy[];
