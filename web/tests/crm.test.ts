@@ -2,12 +2,23 @@ import {describe,it,expect,vi} from 'vitest';
 vi.mock('server-only',()=>({}));
 const mockedRest=vi.hoisted(()=>({rest:vi.fn(),countRows:vi.fn()}));
 vi.mock('@/lib/rest',()=>mockedRest);
-import {canReadCrm,canWriteCrm,profileSchema,safeSearch,pageOffset,profileReminders,taskSchema} from '@/lib/crm';
+import {canReadCrm,canWriteCrm,profileSchema,safeSearch,pageOffset,profileReminders,taskSchema,vehicleAvailability} from '@/lib/crm';
 import {crmVehicles,crmList,crmSummary,demoCrm} from '@/lib/crm-data';
 import {demoOrgs,demoPolicies} from '@/lib/demo';
 import type {Context} from '@/lib/types';
 const ctx:Context={user:{id:'demo',email:'demo'},demo:true,orgs:demoOrgs,policies:demoPolicies,memberships:[]};
 describe('fleet CRM permissions, validation and demo',()=>{
+ it('keeps a vehicle unavailable until every maintenance task is closed, without losing its recorded status',()=>{
+  const d=demoCrm(),v={...d.vehicles[0],profile:{...d.vehicles[0].profile!,operational_status:'available' as const}};
+  const t={...d.tasks[0],vehicle_id:v.id,fleet_id:v.fleet_id,category:'repair' as const};
+  expect(vehicleAvailability(v,[t])).toBe('maintenance');
+  expect(vehicleAvailability({...v,profile:null},[t])).toBe('maintenance');
+  expect(vehicleAvailability(v,[{...t,status:'completed'}, {...t,id:'second',status:'in_progress'}])).toBe('maintenance');
+  expect(vehicleAvailability(v,[{...t,status:'completed'},{...t,status:'cancelled'}])).toBe('available');
+  expect(vehicleAvailability(v,[{...t,category:'task'}])).toBe('available');
+  expect(vehicleAvailability(v,[{...t,fleet_id:'other'}])).toBe('available');
+  for(const status of ['off_road','disposed','maintenance'] as const){expect(vehicleAvailability({...v,profile:{...v.profile,operational_status:status}},[])).toBe(status);}
+ });
  it('allows fleet staff to manage, insurer/accounts to read, and denies drivers',()=>{
   for(const role of ['platform_super_admin','fleet_admin','fleet_manager','insurer_admin','fleet_accounts','driver']){
    const c={...ctx,demo:false,memberships:[{organisation_id:'f',active:true,role}]};

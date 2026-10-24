@@ -9,9 +9,9 @@ function FleetField({fleets,fleet,vehicle}:{fleets:Fleet[];fleet:string;vehicle?
 function VehicleField({vehicle}:{vehicle?:CrmVehicle}){return vehicle?<input type="hidden" name="vehicle_id" value={vehicle.id}/>:<label>Vehicle registration (optional)<input name="registration" maxLength={12} placeholder="AB26 CDE"/><span className="form-note">Must belong to the chosen fleet.</span></label>;}
 export function ProfileEditor({vehicle,disabled}:{vehicle:CrmVehicle;disabled:boolean}){
  const {pending,result,onSubmit}=useAction(saveProfile,false),p=vehicle.profile;
- return <form onSubmit={onSubmit}><fieldset disabled={disabled||pending}><input type="hidden" name="fleet_id" value={vehicle.fleet_id}/><input type="hidden" name="vehicle_id" value={vehicle.id}/><div className="form-grid">
+ return <form onSubmit={onSubmit}><p className="form-note">Current availability: {vehicle.availability?labelOf(vehicle.availability):'Not recorded'}. Active maintenance work makes this vehicle unavailable until all linked maintenance is completed or cancelled. The recorded status below is retained.</p><fieldset disabled={disabled||pending}><input type="hidden" name="fleet_id" value={vehicle.fleet_id}/><input type="hidden" name="vehicle_id" value={vehicle.id}/><div className="form-grid">
   <label>Depot<input name="depot" maxLength={120} defaultValue={p?.depot||''}/></label>
-  <label>Availability<select name="operational_status" defaultValue={p?.operational_status||'available'}>{operationalStatuses.map(s=><option key={s} value={s}>{labelOf(s)}</option>)}</select></label>
+  <label>Recorded availability<select name="operational_status" defaultValue={p?.operational_status||'available'}>{operationalStatuses.map(s=><option key={s} value={s}>{labelOf(s)}</option>)}</select></label>
   <label>Mileage<input name="mileage" type="number" min="0" max="5000000" step="1" defaultValue={p?.mileage??''}/></label>
   <label>Mileage reading date<input name="mileage_recorded_on" type="date" defaultValue={p?.mileage_recorded_on||''}/></label>
   {([['mot_due','MOT due'],['tax_due','Tax due'],['service_due','Service due'],['replacement_due','Replacement / return date']] as const).map(([key,label])=><label key={key}>{label}<input name={key} type="date" defaultValue={p?.[key]||''}/></label>)}

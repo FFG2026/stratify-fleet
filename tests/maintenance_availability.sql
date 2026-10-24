@@ -1,0 +1,24 @@
+begin;
+select set_config('maintenance.user',gen_random_uuid()::text,true),set_config('maintenance.vehicle',gen_random_uuid()::text,true);
+insert into auth.users(id,email) values(current_setting('maintenance.user')::uuid,'maintenance-check@example.invalid');
+insert into public.memberships(user_id,organisation_id,role) values(current_setting('maintenance.user')::uuid,'20000000-0000-4000-8000-000000000001','fleet_admin');
+insert into public.vehicles(id,fleet_id,registration,make_model,created_by) values(current_setting('maintenance.vehicle')::uuid,'20000000-0000-4000-8000-000000000001','ZZ99TST','Test vehicle',current_setting('maintenance.user')::uuid);
+select set_config('request.jwt.claim.sub',current_setting('maintenance.user'),true);
+set local role authenticated;
+do $$ declare v uuid:=current_setting('maintenance.vehicle')::uuid; t uuid; t2 uuid; begin
+ insert into public.crm_tasks(fleet_id,vehicle_id,title,category) values('20000000-0000-4000-8000-000000000001',v,'Maintenance check','repair') returning id into t;
+ if (select operational_status from public.crm_vehicle_availability where id=v) is distinct from 'maintenance' then raise exception 'Missing profile not unavailable';end if;
+ insert into public.crm_vehicle_profiles(fleet_id,vehicle_id,operational_status) values('20000000-0000-4000-8000-000000000001',v,'available');
+ insert into public.crm_tasks(fleet_id,vehicle_id,title,category,status) values('20000000-0000-4000-8000-000000000001',v,'Second job','service','in_progress') returning id into t2;
+ update public.crm_tasks set status='completed' where id=t;
+ if (select operational_status from public.crm_vehicle_availability where id=v) is distinct from 'maintenance' then raise exception 'Second job ignored';end if;
+ update public.crm_tasks set status='cancelled' where id=t2;
+ if (select operational_status from public.crm_vehicle_availability where id=v) is distinct from 'available' then raise exception 'Availability not restored';end if;
+ update public.crm_vehicle_profiles set operational_status='off_road' where vehicle_id=v;
+ update public.crm_tasks set status='open' where id=t;
+ if (select operational_status from public.crm_vehicle_availability where id=v) is distinct from 'off_road' then raise exception 'Manual status lost';end if;
+ if exists(select 1 from public.crm_vehicle_availability where fleet_id='20000000-0000-4000-8000-000000000003') then raise exception 'Cross fleet status leaked';end if;
+end $$;
+reset role;
+rollback;
+select 'PASS: missing profile, multiple maintenance jobs, completion/cancellation, manual status and fleet isolation' as result;
