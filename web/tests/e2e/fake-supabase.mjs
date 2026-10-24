@@ -14,6 +14,8 @@ const users = {
   'customer@example.test': { id: 'a0000000-0000-4000-8000-000000000003', role: 'fleet_admin', org: ids.f1, see: [ids.f1] },
   'demo@stratifyfleet.co.uk': { id: 'a0000000-0000-4000-8000-000000000004', role: null, org: null, see: [] },
   'driver@example.test': { id: 'a0000000-0000-4000-8000-000000000006', role: 'driver', org: ids.f1, see: [] },
+  'mfa@example.test': { id: 'a0000000-0000-4000-8000-000000000007', role: 'insurer_admin', org: ids.i1, see: [ids.i1, ids.f1, ids.f2], factors: [{ id: 'fac-mfa', status: 'verified', factor_type: 'totp' }], jwt: true },
+  'enrol@example.test': { id: 'a0000000-0000-4000-8000-000000000008', role: 'insurer_admin', org: ids.i1, see: [ids.i1, ids.f1, ids.f2], factors: [] },
   'nobody@example.test': { id: 'a0000000-0000-4000-8000-000000000005', role: null, org: null, see: [] }
 };
 const allOrgs = [
@@ -43,7 +45,13 @@ const lines = periods.filter(p => p.fleet_id === ids.f1).slice(0, 27).map((p, i)
 export function startFake(port) {
   const calls = [], reqlog = [];
   const claims = createClaims(ids);
-  const byToken = token => Object.entries(users).find(([email]) => token === 'tok-' + email);
+  const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const mkjwt = (email, aal) => b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ sub: users[email].id, email, aal, role: 'authenticated', aud: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }) + '.c2ln';
+  const byToken = token => {
+    if (!token.startsWith('tok-') && token.split('.').length === 3) { try { const email = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).email; return users[email] ? [email, users[email]] : undefined; } catch { return undefined; } }
+    return Object.entries(users).find(([email]) => token === 'tok-' + email);
+  };
+  const authUser = (email, u) => ({ id: u.id, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: u.mustChange ? { must_change_password: true } : {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z', factors: u.factors || [] });
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
     let raw = ''; for await (const c of req) raw += c;
@@ -59,7 +67,7 @@ export function startFake(port) {
       const now = Math.floor(Date.now() / 1000);
       const jwt = 'x.' + Buffer.from(JSON.stringify({ sub: u.id, email, exp: now + 3600, role: 'authenticated', aud: 'authenticated' })).toString('base64url') + '.x';
       void jwt;
-      return json(200, { access_token: 'tok-' + email, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + email, user: { id: u.id, email, aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: u.mustChange ? { must_change_password: true } : {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' } });
+      return json(200, { access_token: u.jwt ? mkjwt(email, 'aal1') : 'tok-' + email, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + email, user: authUser(email, u) });
     }
     if (url.pathname.startsWith('/auth/v1/admin/')) {
       if (!/Bearer test-service-role$/.test(req.headers.authorization || '')) return json(401, { msg: 'bad key' });
@@ -81,10 +89,28 @@ export function startFake(port) {
       if (req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'image/png' }); return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64')); }
       return json(200, { Key: rest });
     }
+    if (url.pathname === '/auth/v1/recover') { calls.push({ auth: 'recover', email: body?.email, redirect: url.searchParams.get('redirect_to') }); return json(200, {}); }
+    if (url.pathname.startsWith('/auth/v1/factors')) {
+      if (!found) return json(401, { message: 'invalid JWT' });
+      const [fe, fu] = found; fu.factors ??= [];
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (req.method === 'POST' && parts.length === 3) {
+        const f = { id: 'fac-' + (fu.factors.length + 1) + '-' + Date.now(), status: 'unverified', factor_type: 'totp' }; fu.factors.push(f); calls.push({ auth: 'enrol', as: fe });
+        return json(200, { id: f.id, type: 'totp', friendly_name: body.friendly_name, totp: { qr_code: 'data:image/svg+xml;utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>', secret: 'JBSWY3DPEHPK3PXP', uri: 'otpauth://totp/Stratify' } });
+      }
+      if (req.method === 'POST' && parts[4] === 'challenge') return json(200, { id: 'chal-1', type: 'totp', expires_at: Math.floor(Date.now() / 1000) + 300 });
+      if (req.method === 'POST' && parts[4] === 'verify') {
+        if (body.code !== '123456') return json(400, { error_code: 'mfa_verification_failed', msg: 'Invalid TOTP code entered' });
+        const f = fu.factors.find(x => x.id === parts[3]); if (f) f.status = 'verified'; calls.push({ auth: 'verified', as: fe });
+        const now = Math.floor(Date.now() / 1000);
+        return json(200, { access_token: fu.jwt ? mkjwt(fe, 'aal2') : 'tok-' + fe, token_type: 'bearer', expires_in: 3600, expires_at: now + 3600, refresh_token: 'ref-' + fe, user: authUser(fe, fu) });
+      }
+      if (req.method === 'DELETE') { fu.factors = fu.factors.filter(x => x.id !== parts[3]); calls.push({ auth: 'unenrol', as: fe }); return json(200, { id: parts[3] }); }
+    }
     if (url.pathname === '/auth/v1/user') {
       if (!found) return json(401, { message: 'invalid JWT' });
       if (req.method === 'PUT') { if (body.password === found[1].pw) return json(422, { error_code: 'same_password', message: 'New password should be different from the old password.' }); found[1].pw = body.password; calls.push({ admin: 'password_changed', as: found[0] }); }
-      return json(200, { id: found[1].id, email: found[0], aud: 'authenticated', role: 'authenticated', email_confirmed_at: '2026-01-01T00:00:00Z', app_metadata: found[1].mustChange ? { must_change_password: true } : {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' });
+      return json(200, authUser(found[0], found[1]));
     }
     if (url.pathname === '/auth/v1/logout') return json(204, {});
     if (!found) return json(401, { message: 'JWT expired' });

@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { signIn, type LoginState } from '@/app/login/actions';
 
@@ -12,6 +13,7 @@ export function LoginForm({ configured }: { configured: boolean }) {
         <label>Password<input type="password" name="password" autoComplete="current-password" required /></label>
         <button className="primary" disabled={!configured || pending}>{pending ? 'Signing in…' : 'Sign in'}</button>
         <div role="alert" className="form-note">{state?.error}</div>
+        <p className="form-note"><Link href="/forgot-password">Forgot your password?</Link></p>
       </form>
     </>
   );

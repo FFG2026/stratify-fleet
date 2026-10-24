@@ -16,5 +16,12 @@ export async function signIn(_prev: LoginState, form: FormData): Promise<LoginSt
   if (error) return { error: 'Unable to sign in. Check your details.' };
   // Pending invitations for a confirmed email become memberships at first sign-in.
   if (email.toLowerCase() !== demoAccountEmail()) await rpc('claim_invitations', {}).catch(() => null);
-  redirect('/');
+  // Someone with two-step sign-in turned on must pass the second step before anything else.
+  let needsCode = false;
+  try {
+    const { data: user } = await supabase.auth.getUser();
+    const enrolled = (user.user?.factors ?? []).some(f => f.status === 'verified');
+    needsCode = enrolled && (await supabase.auth.mfa.getAuthenticatorAssuranceLevel()).data?.currentLevel !== 'aal2';
+  } catch { /* the database refuses data to an unverified session anyway */ }
+  redirect(needsCode ? '/mfa' : '/');
 }

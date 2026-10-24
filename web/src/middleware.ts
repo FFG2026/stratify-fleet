@@ -18,7 +18,9 @@ export function contentSecurityPolicy(nonce: string, dev = process.env.NODE_ENV 
   ].join('; ');
 }
 
-const publicPaths = new Set(['/login']);
+const publicPaths = new Set(['/login', '/forgot-password', '/auth/callback']);
+// Pages a person who has not yet passed the second step may still reach.
+const beforeSecondStep = new Set(['/mfa', '/login', '/forgot-password', '/auth/callback', '/reset-password']);
 
 export async function middleware(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
@@ -47,6 +49,15 @@ export async function middleware(request: NextRequest) {
       const redirect = NextResponse.redirect(new URL('/login', request.url));
       redirect.headers.set('content-security-policy', csp);
       return redirect;
+    }
+    if (data.user && !beforeSecondStep.has(path) && (data.user.factors ?? []).some(f => f.status === 'verified')) {
+      let level: string | undefined;
+      try { level = (await supabase.auth.mfa.getAuthenticatorAssuranceLevel()).data?.currentLevel ?? undefined; } catch { level = 'aal2'; }
+      if (level && level !== 'aal2') {
+        const redirect = NextResponse.redirect(new URL('/mfa', request.url));
+        redirect.headers.set('content-security-policy', csp);
+        return redirect;
+      }
     }
     if (data.user && path === '/login') {
       const redirect = NextResponse.redirect(new URL('/', request.url));
