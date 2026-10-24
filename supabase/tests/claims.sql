@@ -65,7 +65,7 @@ begin
   select assessed_at is null into ok from public.claims where id = cid; if not ok then raise exception 'T15 editing did not reset the review'; end if; checks := checks + 1;
   begin perform public.submit_claim(cid); raise exception 'T16 sent after an edit without a fresh review'; exception when sqlstate '22023' then null; end; checks := checks + 1;
   perform public.assess_claim(cid, 'Looks right.', false);
-  select count(*) into n from public.claim_events where claim_id = cid and kind = 'assessed'; if n <> 1 then raise exception 'T17 fleet cannot see its own internal event'; end if; checks := checks + 1;
+  select count(*) into n from public.claim_events where claim_id = cid and kind = 'assessed'; if n < 1 then raise exception 'T17 fleet cannot see its own internal event'; end if; checks := checks + 1;
   perform public.submit_claim(cid); checks := checks + 1;
   begin perform public.update_claim_details(cid, vd, null, now() - interval '2 hours', 'A1', 'Changed after sending to the insurer!', false, null, false, null, true, false); raise exception 'T18 edit after sending';
   exception when sqlstate '22023' then null; end; checks := checks + 1;

@@ -1,0 +1,105 @@
+import 'server-only';
+import { rest } from '@/lib/rest';
+import { checkedId } from '@/lib/ids';
+import { getMyCover, isDriverOnly, isInsurerSide, rolesOf } from '@/lib/data';
+import type { Context } from '@/lib/types';
+
+export type Side = 'driver' | 'fleet' | 'insurer';
+// Which view of claims the person gets. Insurer staff and platform administrators see claims that have been sent to them.
+export const claimSide = (ctx: Context): Side | null =>
+  ctx.demo ? null : isDriverOnly(ctx) ? 'driver' : rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r)) ? 'insurer'
+    : rolesOf(ctx).some(r => ['fleet_admin', 'fleet_manager'].includes(r)) ? 'fleet' : null;
+export const canReportClaims = (ctx: Context) => { const s = claimSide(ctx); return s === 'driver' || s === 'fleet'; };
+export const canLogClaims = (ctx: Context) => claimSide(ctx) === 'insurer';
+export const claimFleetOf = (ctx: Context) => ctx.memberships.find(m => m.active && ['fleet_admin', 'fleet_manager', 'driver'].includes(m.role))?.organisation_id ?? null;
+export { isInsurerSide };
+
+export type ClaimRow = {
+  id: string; reference: string; fleet_id: string; insurer_id: string; policy_id: string | null; vehicle_id: string | null; registration: string;
+  driver_user_id: string | null; driver_name: string | null; origin: 'driver' | 'fleet' | 'insurer'; reported_by: string; status: string;
+  incident_at: string; location: string; description: string; anyone_injured: boolean; injury_details: string | null;
+  police_attended: boolean | null; police_reference: string | null; vehicle_driveable: boolean | null; third_party_involved: boolean | null;
+  on_cover_at_incident: boolean | null; no_photos_confirmed: boolean; assessed_at: string | null; assessment_notes: string | null;
+  submitted_at: string | null; insurer_reference: string | null; closed_at: string | null; outcome: string | null; outcome_note: string | null;
+  created_at: string; updated_at: string;
+};
+export type ClaimParty = { id: string; claim_id: string; kind: 'third_party' | 'witness'; name: string; phone: string | null; vehicle_registration: string | null; insurer_name: string | null; injured: boolean | null; notes: string | null; added_by: string };
+export type ClaimEvent = { id: string; kind: string; side: 'driver' | 'fleet' | 'insurer'; visibility: string; actor_label: string | null; actor_email: string | null; body: string | null; created_at: string };
+export type ClaimRequest = { id: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null };
+export type ClaimFile = { id: string; request_id: string | null; kind: 'photo' | 'document'; file_name: string; content_type: string; size_bytes: number; caption: string | null; uploaded_by: string; uploaded_side: Side; uploaded_at: string };
+export type Notice = { id: string; claim_id: string | null; kind: string; title: string; body: string | null; created_at: string; read_at: string | null };
+
+const clean = (q: string) => q.replace(/[^A-Za-z0-9 -]/g, '').trim().slice(0, 30);
+
+export async function listClaims(p: { status?: string; q?: string; offset: number; limit: number }) {
+  const query = new URLSearchParams({ select: '*', order: 'updated_at.desc', offset: String(p.offset), limit: String(p.limit) });
+  if (p.status === 'open') query.set('status', 'neq.closed');
+  else if (p.status === 'closed') query.set('status', 'eq.closed');
+  else if (p.status && p.status.startsWith('in:')) query.set('status', 'in.(' + p.status.slice(3).split(',').filter(s => /^[a-z_]+$/.test(s)).join(',') + ')');
+  const q = clean(p.q ?? '');
+  if (q) query.set('or', `(reference.ilike.*${q}*,registration.ilike.*${q.replace(/ /g, '')}*)`);
+  return rest<{ rows: ClaimRow[]; total: number }>('/rest/v1/claims?' + query, { count: true });
+}
+
+export async function countClaims(filter: string) {
+  const res = await rest<{ rows: unknown[]; total: number }>(`/rest/v1/claims?select=id&limit=1&${filter}`, { count: true });
+  return res.total;
+}
+
+export async function getClaim(id: string) {
+  const c = checkedId(id);
+  const [claims, parties, events, requests, files] = await Promise.all([
+    rest<ClaimRow[]>('/rest/v1/claims?select=*&id=eq.' + c),
+    rest<ClaimParty[]>(`/rest/v1/claim_parties?select=*&claim_id=eq.${c}&order=created_at.asc&limit=50`),
+    rest<ClaimEvent[]>(`/rest/v1/claim_events?select=id,kind,side,visibility,actor_label,actor_email,body,created_at&claim_id=eq.${c}&order=created_at.asc&limit=500`),
+    rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,question,due_on,requested_at,answered_at,answer,cancelled_at&claim_id=eq.${c}&order=requested_at.asc&limit=100`),
+    rest<ClaimFile[]>(`/rest/v1/claim_attachments?select=id,request_id,kind,file_name,content_type,size_bytes,caption,uploaded_by,uploaded_side,uploaded_at&claim_id=eq.${c}&order=uploaded_at.asc&limit=100`)
+  ]);
+  return claims[0] ? { claim: claims[0], parties, events, requests, files } : null;
+}
+export async function getClaimBasic(id: string) {
+  const rows = await rest<Pick<ClaimRow, 'id' | 'fleet_id' | 'status'>[]>('/rest/v1/claims?select=id,fleet_id,status&id=eq.' + checkedId(id));
+  return rows[0] ?? null;
+}
+export async function getClaimFile(id: string) {
+  const rows = await rest<{ id: string; storage_path: string; file_name: string; content_type: string }[]>(
+    '/rest/v1/claim_attachments?select=id,storage_path,file_name,content_type&id=eq.' + checkedId(id));
+  return rows[0] ?? null;
+}
+
+export async function getNotices(limit = 15) {
+  return rest<Notice[]>('/rest/v1/my_notifications?select=*&order=created_at.desc&limit=' + limit);
+}
+
+// Choices for the report form.
+export async function reportChoices(ctx: Context) {
+  const side = claimSide(ctx);
+  if (side === 'driver') {
+    const rows = await getMyCover();
+    const seen = new Map<string, string>();
+    for (const r of rows) seen.set(r.registration, r.make_model || '');
+    return { vehicles: [...seen.keys()], drivers: [] as { id: string; name: string }[] };
+  }
+  const fleet = claimFleetOf(ctx);
+  if (side !== 'fleet' || !fleet) return { vehicles: [] as string[], drivers: [] as { id: string; name: string }[] };
+  const [veh, drv] = await Promise.all([
+    rest<{ registration: string }[]>(`/rest/v1/vehicles?select=registration&fleet_id=eq.${checkedId(fleet)}&order=registration.asc&limit=500`),
+    rest<{ user_id: string; full_name: string }[]>(`/rest/v1/driver_profiles?select=user_id,full_name&fleet_id=eq.${checkedId(fleet)}&order=full_name.asc&limit=300`)
+  ]);
+  return { vehicles: veh.map(v => v.registration), drivers: drv.map(d => ({ id: d.user_id, name: d.full_name })) };
+}
+
+// A typed registration to a vehicle in the fleet, if there is one.
+export async function vehicleIdByRegistration(fleet: string, registration: string): Promise<string | null> {
+  const rows = await rest<{ id: string }[]>(`/rest/v1/vehicles?select=id&fleet_id=eq.${checkedId(fleet)}&registration=eq.${encodeURIComponent(registration)}&limit=1`);
+  return rows[0]?.id ?? null;
+}
+export async function myVehicleIdByRegistration(registration: string): Promise<string | null> {
+  const rows = await getMyCover();
+  return rows.find(r => r.registration === registration)?.vehicle_id ?? null;
+}
+
+export async function unreadCount(): Promise<number> {
+  try { return (await rest<{ rows: unknown[]; total: number }>('/rest/v1/my_notifications?select=id&read_at=is.null&limit=1', { count: true })).total; }
+  catch { return 0; }
+}

@@ -1,6 +1,7 @@
 // A small stand-in for Supabase (auth + REST) used ONLY by the browser test. It is not a model of row-level security:
 // real tenant isolation is proven by the database tests in ../../../tests/*.sql. This checks the portal's screens and forms.
 import { createServer } from 'node:http';
+import { createClaims } from './fake-claims.mjs';
 
 const ids = {
   platform: '10000000-0000-4000-8000-000000000001', i1: '10000000-0000-4000-8000-000000000002', i2: '10000000-0000-4000-8000-000000000003',
@@ -41,6 +42,7 @@ const lines = periods.filter(p => p.fleet_id === ids.f1).slice(0, 27).map((p, i)
 
 export function startFake(port) {
   const calls = [], reqlog = [];
+  const claims = createClaims(ids);
   const byToken = token => Object.entries(users).find(([email]) => token === 'tok-' + email);
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -100,6 +102,7 @@ export function startFake(port) {
     if (path.startsWith('rpc/')) {
       const name = path.slice(4);
       calls.push({ rpc: name, as: email, body });
+      try { const out = claims.rpc(name, body, u, email); if (out !== undefined) return json(200, out); } catch (e) { if (e.http) return json(e.http, { message: e.message }); throw e; }
       if (name === 'list_members') return json(200, body.p_org === ids.f1 ? [
         { id: 'b0000000-0000-4000-8000-000000000001', user_id: users['customer@example.test'].id, email: 'customer@example.test', role: 'fleet_admin', active: true, pending: false },
         { id: 'b0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'manager@example.test', role: 'fleet_manager', active: true, pending: false },
@@ -120,6 +123,7 @@ export function startFake(port) {
       return json(200, null);
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return json(405, { message: 'writes must go through functions' });
+    { const rows = claims.get(path, q, u); if (rows) return page(rows); }
     const driverId = users['driver@example.test'].id, rivalId = 'a0000000-0000-4000-8000-000000000077';
     const profiles = [
       { user_id: driverId, fleet_id: ids.f1, full_name: 'Dana Driver', date_of_birth: '1988-03-14', licence_number: 'DRIVE803148DA9AB', phone: '07700900123', no_claims_declared_at: null, no_convictions_declared_at: '2026-09-01T10:00:00Z', updated_at: '2026-09-01T10:00:00Z' },
