@@ -293,3 +293,7 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Tests: `supabase/tests/audit_branding.sql` (11 checks); unit 57; e2e 169/169.
 - Not done on purpose: the GitHub repository is NOT made private automatically (a private repo can stop the free Vercel plan deploying from an organisation repo). Decision for Owen.
 - Decision still with Owen: whether insurer admins should keep the ability to add and remove cover (currently kept).
+
+## IPT and cover permissions — decisions from Owen (24 Oct 2026)
+- **IPT**: the insurer quotes a daily rate plus IPT, so rates are entered excluding tax and IPT is added on top. Standard rate is 12% (unchanged since 1 June 2017, per GOV.UK); a 20% higher rate exists for travel insurance, appliance cover and some insurance sold alongside vehicles, not ordinary motor fleet cover. The billing rules form now pre-fills 0.12 (editable); saved reports show net, IPT and gross to insurer/platform roles. Existing reports keep the 0% they were generated with; only new billing rules and new reports use 12%. Neither insurer has billing rules yet, so nothing changes until each insurer saves them. Insurers should still confirm the treatment on their own policies.
+- **Insurer admins keep add and remove cover.** Decision confirmed by Owen; no change needed.

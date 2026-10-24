@@ -21,7 +21,7 @@ export type Report = {
   id: string; fleet_id: string; policy_id: string | null; month_start: string; status: string; rules_source: string;
   rules_snapshot: Record<string, unknown>; generated_at: string; total_vehicle_days: number | null;
   opening_vehicles: number | null; additions: number | null; removals: number | null; closing_vehicles: number | null;
-  premium_net: string | null;
+  premium_net: string | null; vat_amount?: string | null; premium_gross?: string | null;
 };
 export type ReportLine = { id: number; policy_id: string; registration: string; days: number; first_charged_date: string; last_charged_date: string; daily_rate: string; charge: string };
 export type Member = { id: string; user_id: string | null; email: string; role: string; active: boolean; pending: boolean };

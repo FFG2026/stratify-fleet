@@ -30,13 +30,13 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
   return (
     <>
       <PageHeader title="Rates & billing rules" subtitle="The insurer's own figures. They drive the reconciliation reports." />
-      <Notice>Nothing here is pre-filled by the portal. Each new rate or rule applies from its date and earlier ones are kept, so past reports never change. Whether tax is included in a quoted rate, and the tax rate, are yours to confirm.</Notice>
+      <Notice>Nothing here is pre-filled by the portal. Each new rate or rule applies from its date and earlier ones are kept, so past reports never change. Daily rates are entered excluding IPT; IPT is added on top using the rate in the billing rules.</Notice>
       {insurers.length > 1 && <div className="filters"><ParamSelect name="insurer" label="Insurer" value={insurerId} resetParams={['policy']} options={insurers.map(i => ({ value: i.id, label: i.name }))} /></div>}
       <section className="panel">
         <div className="panel-header"><h2>Billing rules — {orgName(ctx, insurerId)}</h2></div>
         {!rules.length && <Notice alert>No billing rules are set. Reconciliation falls back to its built-in assumption until you add them.</Notice>}
         {rules.length > 0 && <div className="table-scroll"><table>
-          <thead><tr><th>From</th><th>Start day</th><th>End day</th><th>Time zone</th><th>Rounding</th><th>Tax rate</th><th>Note</th></tr></thead>
+          <thead><tr><th>From</th><th>Start day</th><th>End day</th><th>Time zone</th><th>Rounding</th><th>IPT rate</th><th>Note</th></tr></thead>
           <tbody>{rules.map((r, i) => (
             <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>{r.start_day_charged ? 'Charged' : 'Not charged'}</td><td>{r.end_day_charged ? 'Charged' : 'Not charged'}</td><td>{r.timezone}</td><td>{r.rounding_dp} dp</td><td>{r.vat_rate}</td><td>{r.note ?? ''}</td></tr>
           ))}</tbody>
