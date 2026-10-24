@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, orgName } from '@/lib/data';
+import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -10,7 +10,7 @@ import { canReadCrm } from '@/lib/crm';
 
 export const dynamic = 'force-dynamic';
 
-const nav: (NavItem & { customers?: boolean; fleet?: boolean; admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean })[] = [
+const nav: (NavItem & { rates?: boolean; customers?: boolean; fleet?: boolean; admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean })[] = [
   { href: '/overview', label: 'Platform overview', icon: '◈', platform: true },
   { href: '/insurer', label: 'Insurer dashboard', icon: '▦', insurer: true },
   { href: '/customer', label: 'Fleet dashboard', icon: '⌂' },
@@ -19,6 +19,7 @@ const nav: (NavItem & { customers?: boolean; fleet?: boolean; admin?: boolean; p
   { href: '/reconciliation', label: 'Reconciliation', icon: '▥' },
   { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true },
   { href: '/organisations', label: 'Customers', icon: '▧', customers: true },
+  { href: '/rates', label: 'Rates', icon: '£', rates: true },
   { href: '/users', label: 'Users', icon: '◎', admin: true }
 ];
 const planned: NavItem[] = [
@@ -39,7 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
-  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
+  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
   if (!driver && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (

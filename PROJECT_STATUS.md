@@ -242,3 +242,8 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Platform only: move a customer to another insurer — refused while it has a live policy, vehicle on cover or open claim. The old insurer loses sight of that customer's history immediately. Everything is audited.
 - Tests: `supabase/tests/org_onboarding.sql` (13 checks, rolled back); e2e 141/141.
 - Assumption to review: insurer admins can create customers and policies for their own insurer only.
+
+## Rates and billing rules screen (hole B) — built, works through UI, backend and DB
+- `/rates` (platform, insurer admin: view and change; insurer accounts: view only). Billing rules history per insurer and daily-rate history per policy; forms call `set_billing_rules` / `set_daily_rate`. Append-only: a new entry applies from its date and earlier ones are kept.
+- No defaults are supplied: start-day and end-day charging have no pre-selected answer, tax rate starts at 0 and is labelled unconfirmed (IPT rate and whether quoted rates include it are still Owen's/the insurer's to confirm).
+- Tests: `supabase/tests/rates.sql` (9 checks); e2e 147/147.
