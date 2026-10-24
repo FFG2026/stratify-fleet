@@ -151,7 +151,7 @@ try {
     await page.click('button:has-text("Cancel invitation")'); await page.waitForTimeout(500);
     check('cancel invitation calls revoke_invitation', (await calls()).some(c => c.rpc === 'revoke_invitation'));
 
-    await go(page, base + '/drivers'); check('planned modules render a roadmap page', (await text(page)).includes('PLANNED MODULE'));
+    await go(page, base + '/crm'); check('planned modules render a roadmap page', (await text(page)).includes('PLANNED MODULE'));
     await go(page, base + '/nope'); check('unknown pages return a not-found page', (await text(page)).includes('Page not found'));
 
     await go(page, base + '/overview');
@@ -183,6 +183,18 @@ try {
     check('after choosing a password the person reaches the workspace', ['/customer', '/'].includes(new URL(page.url()).pathname) && !(await text(page)).includes('Choose your password'), page.url());
     await context.close(); }
 
+  // ---- driver
+  { const { context, page } = await session('driver@example.test');
+    check('a driver lands on the driver dashboard', new URL(page.url()).pathname === '/driver', page.url());
+    const nav = await page.locator('nav a').allInnerTexts();
+    check('a driver has only Driver dashboard, Drivers & licences and Claims / FNOL', JSON.stringify(nav.map(s => s.replace(/[^A-Za-z/& ]/g, '').trim())) === JSON.stringify(['Driver dashboard', 'Drivers & licences', 'Claims / FNOL']), JSON.stringify(nav));
+    const t = await text(page);
+    check('driver sees the vehicle on cover now with dates, and earlier cover', t.includes('AB10XYZ') && t.includes('Ford Transit') && t.includes('01/01/2026') && t.includes('no end date') && t.includes('Previously on cover') && t.includes('ZZ99OLD') && t.includes('01/03/2026'), t.slice(0, 900));
+    await go(page, base + '/fleet'); check('a driver cannot open the fleet register', new URL(page.url()).pathname === '/driver', page.url());
+    await go(page, base + '/reconciliation'); check('a driver cannot open reconciliation', new URL(page.url()).pathname === '/driver', page.url());
+    await go(page, base + '/drivers'); check('a driver sees the planned licences page, not assignments', (await text(page)).includes('PLANNED MODULE') && !(await text(page)).includes('Assign a driver'));
+    await context.close(); }
+
   // ---- fleet customer
   { const { context, page } = await session('customer@example.test');
     check('customer lands on the fleet dashboard', new URL(page.url()).pathname === '/customer', page.url());
@@ -194,6 +206,13 @@ try {
     check('customer cannot use the insurer dashboard', t.includes('requires insurer or platform administrator'));
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('own row is marked "This is you" and has no controls', t.includes('This is you'), t.slice(-300));
+    await go(page, base + '/drivers'); t = await text(page);
+    check('fleet staff see current driver assignments', t.includes('Assign a driver to a vehicle') && t.includes('driver@example.test') && t.includes('AB10XYZ') && t.includes('Current'), t.slice(0, 600));
+    await page.selectOption('select[name=user]', { label: 'driver@example.test' }); await page.fill('input[name=registration]', 'ab10 xyz'); await page.click('button:has-text("Assign")');
+    await page.waitForSelector('text=assigned. The driver can see it now');
+    check('assigning calls the database function with the vehicle, driver and date', (await calls()).some(c => c.rpc === 'assign_driver' && c.body.p_user === 'a0000000-0000-4000-8000-000000000006' && c.body.p_vehicle === 'f1000000-0000-4000-8000-000000000001' && /^\d{4}-\d\d-\d\d$/.test(c.body.p_from)));
+    await page.click('button:has-text("End today")'); await page.waitForTimeout(500);
+    check('ending an assignment calls end_assignment', (await calls()).some(c => c.rpc === 'end_assignment'));
     await go(page, base + '/fleet'); t = await text(page);
     check('customer register shows only their vehicles', t.includes('AB10XYZ') && !t.includes('CD10XYZ'));
     await go(page, base + '/fleet');

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
-import { getContext, canManageUsers, isPlatform, isInsurerSide, orgName } from '@/lib/data';
+import { getContext, canChange, canManageUsers, isPlatform, isInsurerSide, isDriverOnly, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -8,13 +8,14 @@ import { signOut } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-const nav: (NavItem & { admin?: boolean; platform?: boolean; insurer?: boolean })[] = [
+const nav: (NavItem & { admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean })[] = [
   { href: '/overview', label: 'Platform overview', icon: '◈', platform: true },
   { href: '/insurer', label: 'Insurer dashboard', icon: '▦', insurer: true },
   { href: '/customer', label: 'Fleet dashboard', icon: '⌂' },
   { href: '/fleet', label: 'Vehicle register', icon: '▤' },
   { href: '/changes', label: 'Manage cover', icon: '⇄' },
   { href: '/reconciliation', label: 'Reconciliation', icon: '▥' },
+  { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true },
   { href: '/users', label: 'Users', icon: '◎', admin: true }
 ];
 const planned: NavItem[] = [
@@ -27,16 +28,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   if (ctx.user.mustChangePassword) redirect('/change-password');
-  const items = nav.filter(i => (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
+  const driver = isDriverOnly(ctx);
+  const driverNav: NavItem[] = [
+    { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
+    { href: '/drivers', label: 'Drivers & licences', icon: '◎' },
+    { href: '/claims', label: 'Claims / FNOL', icon: '⚑' }
+  ];
+  const items = driver ? driverNav : nav.filter(i => (!i.staff || canChange(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx)));
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
-      <Sidebar items={items} planned={planned} />
+      <Sidebar items={items} planned={driver ? [] : planned.filter(p => !(p.href === '/drivers' && canChange(ctx)))} />
       <div className="main">
         <header className="topbar">
-          <Suspense fallback={null}>
+          {driver ? <span /> : <Suspense fallback={null}>
             <PolicySwitcher policies={ctx.policies.map(p => ({ value: p.id, label: `${orgName(ctx, p.customer_id)} · ${p.reference}` }))} />
-          </Suspense>
+          </Suspense>}
           <div className="account">
             <Badge warn>{ctx.demo ? 'DEMO · READ-ONLY' : 'DEVELOPMENT'}</Badge>
             <span className="avatar">{initials}</span>

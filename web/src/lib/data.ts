@@ -51,7 +51,9 @@ export function manageableOrgs(ctx: Context): Org[] {
   return ctx.orgs.filter(o => own.has(o.id) || (o.kind === 'customer' && o.insurer_id !== null && own.has(o.insurer_id)));
 }
 export const orgName = (ctx: Context, id: string | null | undefined) => ctx.orgs.find(o => o.id === id)?.name || '—';
-export const homeFor = (ctx: Context) => (isPlatform(ctx) ? '/overview' : isInsurerSide(ctx) ? '/insurer' : '/customer');
+// A person whose only access is as a driver sees the driver workspace, not the fleet's.
+export const isDriverOnly = (ctx: Context) => !ctx.demo && rolesOf(ctx).length > 0 && rolesOf(ctx).every(r => r === 'driver');
+export const homeFor = (ctx: Context) => (isDriverOnly(ctx) ? '/driver' : isPlatform(ctx) ? '/overview' : isInsurerSide(ctx) ? '/insurer' : '/customer');
 
 // ---- fleet register and removal list
 export async function getFleetPage(params: Params): Promise<Page<Period>> {
@@ -150,6 +152,14 @@ export async function getMonthPreview(month: string, policy?: string) {
   }
   if (Number.isFinite(total) && read < total) throw new Error('The vehicle list is too large to preview. Narrow it to one policy.');
   return [...map.values()].sort((a, b) => a.registration.localeCompare(b.registration));
+}
+
+// ---- driver workspace
+export type DriverCoverRow = { assignment_id: string; vehicle_id: string; registration: string; make_model: string | null; assigned_from: string; assigned_to: string | null; cover_start: string | null; cover_end: string | null };
+export async function getMyCover() { return rpc<DriverCoverRow[]>('my_cover', {}); }
+export type Assignment = { id: string; user_id: string; vehicle_id: string; assigned_from: string; assigned_to: string | null; vehicle: { registration: string; make_model: string | null } | null };
+export async function getAssignments(fleet: string) {
+  return rest<Assignment[]>('/rest/v1/vehicle_assignments?select=id,user_id,vehicle_id,assigned_from,assigned_to,vehicle:vehicles(registration,make_model)&fleet_id=eq.' + checkedId(fleet) + '&order=assigned_from.desc&limit=200');
 }
 
 // ---- members

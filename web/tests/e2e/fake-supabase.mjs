@@ -12,6 +12,7 @@ const users = {
   'insurer@example.test': { id: 'a0000000-0000-4000-8000-000000000002', role: 'insurer_admin', org: ids.i1, see: [ids.i1, ids.f1, ids.f2] },
   'customer@example.test': { id: 'a0000000-0000-4000-8000-000000000003', role: 'fleet_admin', org: ids.f1, see: [ids.f1] },
   'demo@stratifyfleet.co.uk': { id: 'a0000000-0000-4000-8000-000000000004', role: null, org: null, see: [] },
+  'driver@example.test': { id: 'a0000000-0000-4000-8000-000000000006', role: 'driver', org: ids.f1, see: [] },
   'nobody@example.test': { id: 'a0000000-0000-4000-8000-000000000005', role: null, org: null, see: [] }
 };
 const allOrgs = [
@@ -94,15 +95,23 @@ export function startFake(port) {
       calls.push({ rpc: name, as: email, body });
       if (name === 'list_members') return json(200, body.p_org === ids.f1 ? [
         { id: 'b0000000-0000-4000-8000-000000000001', user_id: users['customer@example.test'].id, email: 'customer@example.test', role: 'fleet_admin', active: true, pending: false },
-        { id: 'b0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'driver@example.test', role: 'fleet_manager', active: true, pending: false },
+        { id: 'b0000000-0000-4000-8000-000000000002', user_id: 'zz', email: 'manager@example.test', role: 'fleet_manager', active: true, pending: false },
+        { id: 'b0000000-0000-4000-8000-000000000004', user_id: users['driver@example.test'].id, email: 'driver@example.test', role: 'driver', active: true, pending: false },
         { id: 'c0000000-0000-4000-8000-000000000003', user_id: null, email: 'pending@example.test', role: 'fleet_accounts', active: true, pending: true }
       ] : [{ id: 'b0000000-0000-4000-8000-000000000009', user_id: u.id, email, role: u.role, active: true, pending: false }]);
       if (name === 'add_member') return json(200, 'invited');
+      if (name === 'my_cover') return json(200, email === 'driver@example.test' ? [
+        { assignment_id: 'e0000000-0000-4000-8000-000000000001', vehicle_id: 'v1', registration: 'AB10XYZ', make_model: 'Ford Transit', assigned_from: '2026-01-01', assigned_to: null, cover_start: '2026-01-01T09:00:00Z', cover_end: null },
+        { assignment_id: 'e0000000-0000-4000-8000-000000000002', vehicle_id: 'v2', registration: 'ZZ99OLD', make_model: 'Vauxhall Vivaro', assigned_from: '2026-01-01', assigned_to: '2026-03-01', cover_start: '2026-01-01T09:00:00Z', cover_end: '2026-03-01T00:00:00Z' }
+      ] : []);
+      if (name === 'assign_driver' || name === 'end_assignment') return json(200, 'e0000000-0000-4000-8000-000000000009');
       if (name === 'generate_reconciliation') return json(200, report.id);
       if (name === 'add_vehicle_cover' || name === 'remove_vehicle_cover') return json(200, 'f0000000-0000-4000-8000-000000000001');
       return json(200, null);
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') return json(405, { message: 'writes must go through functions' });
+    if (path === 'vehicles') return json(200, (q.get('registration') || '') === 'eq.AB10XYZ' ? [{ id: 'f1000000-0000-4000-8000-000000000001' }] : []);
+    if (path === 'vehicle_assignments') return json(200, [{ id: 'e0000000-0000-4000-8000-000000000001', user_id: users['driver@example.test'].id, vehicle_id: 'v1', assigned_from: '2026-01-01', assigned_to: null, vehicle: { registration: 'AB10XYZ', make_model: 'Ford Transit' } }]);
     if (path === 'organisations') return page(allOrgs.filter(o => sees(o.id)));
     if (path === 'policies') {
       const id = (q.get('id') || '').replace('eq.', '');

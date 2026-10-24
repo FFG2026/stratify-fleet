@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation';
-import { getContext, getSummary, demoSummary } from '@/lib/data';
+import { getContext, getSummary, demoSummary, isDriverOnly } from '@/lib/data';
 import { PageHeader, LinkButton } from '@/components/ui';
 import { StaticDashboard } from '@/components/Dashboards';
 
 export default async function Customer() {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (isDriverOnly(ctx)) redirect('/driver');
   const summary = ctx.demo ? demoSummary() : await getSummary(ctx);
   return (
     <>

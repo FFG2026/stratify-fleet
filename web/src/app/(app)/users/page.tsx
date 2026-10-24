@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { getContext, canManageUsers, manageableOrgs, getMembers } from '@/lib/data';
+import { getContext, canManageUsers, manageableOrgs, getMembers, isDriverOnly } from '@/lib/data';
 import { PageHeader, Badge, Notice } from '@/components/ui';
 import { ParamSelect } from '@/components/ParamSelect';
 import { ActiveButton, AddMemberForm, RevokeButton, RoleSelect } from '@/components/MemberControls';
@@ -8,6 +8,7 @@ import { roleLabels, type MemberRole } from '@/lib/members';
 export default async function Users({ searchParams }: { searchParams: Promise<{ org?: string }> }) {
   const ctx = await getContext();
   if (!ctx) redirect('/login');
+  if (isDriverOnly(ctx)) redirect('/driver');
   const header = <PageHeader title="Users" subtitle="Who can sign in, and what each person can see." />;
   if (!canManageUsers(ctx)) return (<>{header}<section className="panel"><div className="panel-body"><h2>User management</h2><p>This page is available to platform, insurer and fleet administrators.</p></div></section></>);
   const orgs = manageableOrgs(ctx);

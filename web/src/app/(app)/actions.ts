@@ -137,6 +137,30 @@ export async function addMember(form: FormData): Promise<ActionResult> {
     return done('Login created. Give them the temporary password; they must choose their own at first sign-in.');
   } catch (error) { return fail(error); }
 }
+// ---- driver assignments (the database checks permission, fleet and driver role)
+export async function assignDriver(form: FormData): Promise<ActionResult> {
+  const ctx = await requireContext();
+  if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+  try {
+    const org = checkedId(form.get('org')), user = checkedId(form.get('user'));
+    const registration = normaliseRegistration(form.get('registration'));
+    const from = String(form.get('from') ?? ''); parseDate(from);
+    const found = await rest<{ id: string }[]>('/rest/v1/vehicles?select=id&fleet_id=eq.' + org + '&registration=eq.' + encodeURIComponent(registration) + '&limit=1');
+    if (!found.length) return { ok: false, message: `${registration} is not a vehicle in this fleet.` };
+    await rpc('assign_driver', { p_vehicle: found[0].id, p_user: user, p_from: from });
+    revalidatePath('/drivers');
+    return done(`${registration} assigned. The driver can see it now.`);
+  } catch (error) { return fail(error); }
+}
+export async function endAssignment(form: FormData): Promise<ActionResult> {
+  const ctx = await requireContext();
+  if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+  try {
+    await rpc('end_assignment', { p_assignment: checkedId(form.get('assignment')), p_to: londonDate(new Date()) });
+    revalidatePath('/drivers');
+    return done('Assignment ended today.');
+  } catch (error) { return fail(error); }
+}
 export async function changeMemberRole(form: FormData): Promise<ActionResult> {
   await requireContext();
   try {
