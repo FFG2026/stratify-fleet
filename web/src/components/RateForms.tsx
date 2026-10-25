@@ -21,7 +21,7 @@ export function RateForm({ policy, reference }: { policy: string; reference: str
 export function BillingRulesForm({ insurer }: { insurer: string }) {
   const { pending, result, onSubmit } = useAction(addBillingRules);
   const yn = (name: string, label: string) => (
-    <fieldset><legend>{label}</legend>
+    <fieldset className="yesno-group"><legend>{label}</legend>
       <label className="inline"><input type="radio" name={name} value="yes" required /> Charged</label>
       <label className="inline"><input type="radio" name={name} value="no" /> Not charged</label>
     </fieldset>

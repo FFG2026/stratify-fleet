@@ -178,3 +178,8 @@ button.big{min-height:52px;font-size:16px;padding:12px 28px}
 .sidebar nav a{display:flex;align-items:center}
 
 .brand-name{margin-top:10px;font-size:12px;font-weight:700;letter-spacing:.4px;color:var(--ink);overflow-wrap:anywhere}
+/* Yes/no radio groups (billing rules): keep the dot beside its text, legend styled like other field labels */
+fieldset.yesno-group{gap:10px;align-content:start}
+fieldset.yesno-group legend{padding:0;margin-bottom:8px;font-size:11px;font-weight:600;color:#65776c}
+label.inline{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:400;color:var(--ink);min-height:36px}
+label.inline input[type=radio],label.inline input[type=checkbox]{width:auto;margin:0;flex:none}
