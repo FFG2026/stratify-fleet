@@ -496,6 +496,10 @@ try {
     await go(page, base + '/integrations'); t = await text(page);
     check('MID/MIB page says plainly that nothing is connected or sent and that submission is not cover', t.includes('not connected') && t.includes('does not confirm or create cover') && t.includes('Queued'), t.slice(-500));
     await go(page, base + '/branding'); t = await text(page);
+    check('insurer cannot open Branding', new URL(page.url()).pathname !== '/branding', page.url());
+    await context.close(); }
+  { const {context,page}=await session('platform@example.test');
+    await go(page, base + '/branding'); let t=await text(page);
     check('branding page offers a name and colour', t.includes('Save branding') && t.includes('Accent colour'), t.slice(-300));
     await page.evaluate(() => { const i = document.querySelector('input[name=accent]'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, '#ffff00'); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); });
     await page.check('input[name=useAccent]'); await page.click('button:has-text("Save branding")'); await page.waitForSelector('text=too light to read');

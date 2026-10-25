@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 
 export type NavItem = { href: string; label: string; icon?: string; soon?: boolean; badge?: number };
 
-export function Sidebar({ items, planned, brandName = null }: { items: NavItem[]; planned: NavItem[]; brandName?: string | null }) {
+export function Sidebar({ items, planned, brandName = null, brandLogo=null }: { items: NavItem[]; planned: NavItem[]; brandName?: string | null; brandLogo?:string|null }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const link = (i: NavItem) => (
@@ -16,12 +16,12 @@ export function Sidebar({ items, planned, brandName = null }: { items: NavItem[]
   return (
     <aside className={'sidebar' + (open ? ' menu-open' : '')} onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}>
       <div className="mobile-navigation-header">
-        <Link prefetch={false} className="mobile-navigation-brand" href="/" aria-label="Stratify home"><img className="brand-logo" src="/stratify-logo.png" alt="Stratify" width={2048} height={688} /></Link>
+        <Link prefetch={false} className="mobile-navigation-brand" href="/" aria-label="Stratify home"><img className="brand-logo" src={brandLogo||"/stratify-logo.png"} alt={brandLogo?(brandName||"Insurer logo"):"Stratify"} width={2048} height={688} /></Link>
         <button type="button" id="menu-toggle" aria-controls="workspace-navigation" aria-expanded={open} aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} onClick={() => setOpen(!open)}>
           <span className="hamburger" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span>
         </button>
       </div>
-      <div className="brand"><img className="brand-logo" src="/stratify-logo.png" alt="Stratify" width={2048} height={688} />{brandName && <div className="brand-name">{brandName}</div>}</div>
+      <div className="brand"><img className="brand-logo" src={brandLogo||"/stratify-logo.png"} alt={brandLogo?(brandName||"Insurer logo"):"Stratify"} width={2048} height={688} />{brandName && <div className="brand-name">{brandName}</div>}</div>
       <nav id="workspace-navigation" aria-label="Main navigation">
         <div className="nav-label">Workspace</div>
         {items.map(link)}

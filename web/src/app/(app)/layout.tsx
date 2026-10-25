@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { rpc } from '@/lib/rest';
+import { getEnv } from '@/lib/env';
 import { ApplyBranding } from '@/components/ApplyBranding';
 import { adminRoles, mfaRequiredForAdmins } from '@/lib/mfa';
 import { Suspense } from 'react';
@@ -24,7 +25,7 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true },
   { href: '/organisations', label: 'Customers', icon: '▧', customers: true },
   { href: '/rates', label: 'Rates', icon: '£', rates: true },
-  { href: '/branding', label: 'Branding', icon: '◐', customers: true },
+  { href: '/branding', label: 'Branding', icon: '◐', platform: true },
   { href: '/audit', label: 'Audit log', icon: '☰', audit: true },
   { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true },
   { href: '/users', label: 'Users', icon: '◎', admin: true }
@@ -42,7 +43,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const { data } = await (await createClient()).auth.getUser();
     if (!(data.user?.factors ?? []).some(f => f.status === 'verified')) redirect('/security?required=1');
   }
-  const brand = ctx.demo ? null : (await rpc<{ display_name: string | null; accent: string | null }[]>('my_branding', {}).catch(() => []))[0] ?? null;
+  const brand = ctx.demo ? null : (await rpc<{ display_name: string | null; accent: string | null; logo_path?:string|null }[]>('my_branding', {}).catch(() => []))[0] ?? null;
   const driver = isDriverOnly(ctx);
   const driverNav: NavItem[] = [
     { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
@@ -52,13 +53,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
-  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
+  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
   if (!driver && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
       <ApplyBranding accent={brand?.accent ?? null} />
-      <Sidebar brandName={brand?.display_name ?? null} items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
+      <Sidebar brandLogo={brand?.logo_path && getEnv() ? getEnv()!.url+'/storage/v1/object/public/insurer-logos/'+brand.logo_path.split('/').map(encodeURIComponent).join('/') : null} brandName={brand?.display_name ?? null} items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
       <div className="main">
         <header className="topbar">
           {driver ? <span /> : <Suspense fallback={null}>

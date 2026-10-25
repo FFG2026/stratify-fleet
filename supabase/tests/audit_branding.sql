@@ -15,10 +15,13 @@ begin
   -- a driver has no audit permission
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', D, 'role', 'authenticated')::text, true); set local role authenticated;
   select count(*) into bad from public.audit_feed(null, null, 200, 0); if bad <> 0 then raise exception 'T4 driver sees audit'; end if; n := n + 1;
-  -- branding: insurer admin sets its own, not another insurer's; a fleet admin cannot set any
-  reset role; perform set_config('request.jwt.claims', json_build_object('sub', I, 'role', 'authenticated')::text, true); set local role authenticated;
+  -- branding: only platform admins can edit; insurers and fleets receive assigned branding
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', P, 'role', 'authenticated', 'aal', 'aal2')::text, true); set local role authenticated;
   perform public.set_branding(i1, 'Example Mutual Fleet', '#1A5C4B'); n := n + 1;
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', I, 'role', 'authenticated', 'aal', 'aal2')::text, true); set local role authenticated;
+  begin perform public.set_branding(i1, 'Nope', '#000000'); raise exception 'Insurer changed branding'; exception when sqlstate '42501' then n := n + 1;end;
   begin perform public.set_branding(i2, 'Nope', '#000000'); raise exception 'T5 other insurer branded'; exception when sqlstate '42501' then n := n + 1; end;
+  reset role; perform set_config('request.jwt.claims', json_build_object('sub', P, 'role', 'authenticated', 'aal', 'aal2')::text, true);set local role authenticated;
   begin perform public.set_branding(i1, 'Bad', 'red'); raise exception 'T6 bad colour accepted'; exception when sqlstate '22023' then n := n + 1; end;
   reset role; perform set_config('request.jwt.claims', json_build_object('sub', F, 'role', 'authenticated')::text, true); set local role authenticated;
   begin perform public.set_branding(i1, 'Nope', '#000000'); raise exception 'T7 fleet admin branded'; exception when sqlstate '42501' then n := n + 1; end;

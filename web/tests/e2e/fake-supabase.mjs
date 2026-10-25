@@ -149,7 +149,7 @@ export function startFake(port) {
       if (['create_policy', 'renew_policy'].includes(name)) return json(200, '30000000-0000-4000-8000-000000000009');
       if (name === 'set_daily_rate' || name === 'set_billing_rules') { if (!['insurer_admin', 'platform_super_admin'].includes(u.role)) return json(403, { message: 'permission denied' }); return json(200, '40000000-0000-4000-8000-000000000001'); }
       if (name === 'my_branding') return json(200, ['insurer@example.test', 'customer@example.test'].includes(email) ? [{ display_name: 'Example Mutual Fleet', accent: '#1A5C4B' }] : []);
-      if (name === 'set_branding') { if (u.role !== 'insurer_admin' && u.role !== 'platform_super_admin') return json(403, { message: 'permission denied' }); return json(200, null); }
+      if (name === 'set_branding') { if (u.role !== 'platform_super_admin') return json(403, { message: 'permission denied' }); return json(200, null); }
       if (name === 'audit_feed') { if (!['insurer_admin', 'platform_super_admin', 'fleet_admin'].includes(u.role)) return json(200, []); const all = [{ id: 3, occurred_at: '2026-10-22T10:00:00Z', actor_email: 'customer@example.test', actor_kind: 'user', organisation_id: ids.f1, action: 'coverage.added', entity_type: 'coverage_period', note: null, total: 2 }, { id: 2, occurred_at: '2026-10-21T10:00:00Z', actor_email: null, actor_kind: 'system', organisation_id: ids.f1, action: 'claim.created', entity_type: 'claim', note: 'Fictional', total: 2 }]; return json(200, body.p_action ? all.filter(a => a.action.startsWith(body.p_action)).map(a => ({ ...a, total: 1 })) : all); }
       if (name === 'add_member') return json(200, 'invited');
       if (name === 'my_cover') return json(200, email === 'driver@example.test' ? [
