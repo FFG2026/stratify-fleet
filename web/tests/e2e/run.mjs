@@ -138,6 +138,10 @@ try {
     // users
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('users page lists people and shows the pending invitation', t.includes('customer@example.test') && t.includes('Invitation pending'), t.slice(-300));
+    check('users page has clickable role boxes', await page.locator('nav.tab-boxes a.tab-box:has-text("Everyone")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Fleet managers")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Drivers")').count() === 1);
+    await page.locator('nav.tab-boxes a.tab-box:has-text("Fleet managers")').click(); await page.waitForURL(/group=managers/); t = await text(page);
+    check('clicking a role box filters the list to that role', t.includes('Fleet managers in'), t.slice(0, 200));
+    await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001');
     await page.locator('select[aria-label="Role for driver@example.test"]').selectOption('fleet_accounts');
     await page.waitForSelector('text=Role updated');
     check('role change calls change_member_role', (await calls()).some(c => c.rpc === 'change_member_role' && c.body.p_role === 'fleet_accounts'));

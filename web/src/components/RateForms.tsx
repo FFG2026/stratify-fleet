@@ -1,16 +1,28 @@
 'use client';
+import { useState } from 'react';
 import { useAction } from './useAction';
 import { addBillingRules, addRate } from '@/app/(app)/rates-actions';
 
 const status = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={r?.ok === false ? 'form-error' : 'form-note'}>{r?.message}</div>;
 
-export function RateForm({ policy, reference }: { policy: string; reference: string }) {
+export type RatePreset = { label: string; rate: number };
+
+export function RateForm({ policy, reference, presets = [] }: { policy: string; reference: string; presets?: RatePreset[] }) {
   const { pending, result, onSubmit } = useAction(addRate);
+  const [rate, setRate] = useState('');
   return (
     <form className="form-grid" onSubmit={onSubmit}>
       <input type="hidden" name="policy" value={policy} />
+      {presets.length > 0 && (
+        <label className="span-all">Reuse a rate you have already set (optional)
+          <select value="" onChange={e => { if (e.target.value) setRate(e.target.value); }}>
+            <option value="">Choose a rate to copy into the field below</option>
+            {presets.map(p => <option key={p.label} value={Number(p.rate).toFixed(4)}>{p.label}</option>)}
+          </select>
+        </label>
+      )}
       <label>Applies from<input name="from" type="date" required /></label>
-      <label>Daily rate per vehicle (£)<input name="rate" inputMode="decimal" required autoComplete="off" placeholder="e.g. 8.2100" /></label>
+      <label>Daily rate per vehicle (£)<input name="rate" inputMode="decimal" required autoComplete="off" placeholder="e.g. 8.2100" value={rate} onChange={e => setRate(e.target.value)} /></label>
       <label>Note (optional)<input name="note" maxLength={500} autoComplete="off" /></label>
       <div className="actions"><button className="primary" disabled={pending}>{pending ? 'Saving…' : `Add rate to ${reference}`}</button></div>
       {status(result)}

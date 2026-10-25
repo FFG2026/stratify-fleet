@@ -27,6 +27,15 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
     rest<Rules[]>('/rest/v1/billing_rules?select=id,effective_from,start_day_charged,end_day_charged,timezone,rounding_dp,vat_rate,note&insurer_id=eq.' + checkedId(insurerId) + '&order=effective_from.desc&limit=50'),
     selectedPolicy ? rest<Rate[]>('/rest/v1/rate_cards?select=id,policy_id,effective_from,daily_rate,note&policy_id=eq.' + checkedId(selectedPolicy.id) + '&order=effective_from.desc&limit=100') : Promise.resolve([] as Rate[]),
   ]);
+  // Latest rate already set for each of this insurer's other policies, offered as a starting point for a new company.
+  const others = policies.filter(p => p.id !== selectedPolicy?.id);
+  const otherRates = manage && others.length
+    ? await rest<Rate[]>('/rest/v1/rate_cards?select=id,policy_id,effective_from,daily_rate,note&policy_id=in.(' + others.map(p => checkedId(p.id)).join(',') + ')&order=effective_from.desc&limit=500')
+    : [];
+  const presets = others.flatMap(p => {
+    const latest = otherRates.find(r => r.policy_id === p.id);
+    return latest ? [{ label: `£${Number(latest.daily_rate).toFixed(4)} — ${orgName(ctx, p.customer_id)} (${p.reference})`, rate: Number(latest.daily_rate) }] : [];
+  });
   return (
     <>
       <PageHeader title="Rates & billing rules" subtitle="The insurer's own figures. They drive the reconciliation reports." />
@@ -52,7 +61,7 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
             <thead><tr><th>From</th><th>Daily rate</th><th>Note</th></tr></thead>
             <tbody>{rates.map((r, i) => <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>£{Number(r.daily_rate).toFixed(4)}</td><td>{r.note ?? ''}</td></tr>)}</tbody>
           </table></div>}
-          {manage && selectedPolicy && <div className="panel-body"><h3>Add a rate</h3><RateForm policy={selectedPolicy.id} reference={selectedPolicy.reference} /></div>}
+          {manage && selectedPolicy && <div className="panel-body"><h3>Add a rate</h3><p className="subtext">Each company can have its own rate. For a new company, copy one you have already set and change the date.</p><RateForm policy={selectedPolicy.id} reference={selectedPolicy.reference} presets={presets} /></div>}
         </>}
       </section>
     </>
