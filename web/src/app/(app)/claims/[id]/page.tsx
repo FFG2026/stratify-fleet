@@ -1,11 +1,11 @@
 import { notFound, redirect } from 'next/navigation';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, getClaim, getCoverRecord } from '@/lib/claims-data';
+import { claimSide, getClaim, getCoverRecord, getCueSubmissions } from '@/lib/claims-data';
 import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
 import { PageHeader, Badge, Notice, LinkButton } from '@/components/ui';
-import { AnswerForm, ClaimForm, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
+import { AnswerForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
 
 const yn = (v: boolean | null) => (v === null ? 'Not said' : v ? 'Yes' : 'No');
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
@@ -35,6 +35,8 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const openRequests = requests.filter(r => !r.answered_at && !r.cancelled_at);
   const fleetName = orgName(ctx, c.fleet_id);
   const cover = await getCoverRecord(c.vehicle_id, c.incident_at).catch(() => null);
+  // CUE is the insurer's own claims-history contribution; the fleet and driver never see it. null means the CUE table is unavailable, so the panel is hidden.
+  const cue = side === 'insurer' && c.submitted_at ? await getCueSubmissions(c.id).catch(() => null) : null;
   return (
     <>
       <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<LinkButton href="/claims">← Claims</LinkButton>} />
@@ -74,6 +76,13 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
         <section className="panel next-step"><div className="panel-body">
           <h2>{status === 'closed' ? 'Closed claim' : 'Update this claim'}</h2>
           <InsurerPanel claim={c.id} status={status} reference={c.insurer_reference ?? ''} />
+        </div></section>
+      )}
+
+      {cue && (
+        <section className="panel"><div className="panel-body">
+          <div className="cardhead"><h2>Claims and Underwriting Exchange (CUE)</h2><Badge warn>Not connected</Badge></div>
+          <CuePanel claim={c.id} submissions={cue} hasReference={!!c.insurer_reference} />
         </div></section>
       )}
 
