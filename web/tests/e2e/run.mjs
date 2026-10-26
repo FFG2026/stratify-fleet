@@ -137,6 +137,12 @@ try {
 
     // users
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
+    const man = await page.request.get(base + '/manifest.webmanifest'); const manj = await man.json().catch(() => ({}));
+    check('manifest is served without sign-in and is installable', man.ok() && manj.display === 'standalone' && manj.icons?.length >= 3 && manj.start_url === '/', JSON.stringify(manj).slice(0, 150));
+    const sw = await page.request.get(base + '/sw.js'); check('service worker is served and caches nothing', sw.ok() && !(await sw.text()).includes('caches.'));
+    await go(page, base + '/install'); t = await text(page);
+    check('install page explains iPhone, Android and desktop', t.includes('Add to Home Screen') && t.includes('Install app') && t.includes('Safari'), t.slice(0, 200));
+    await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('users page lists people and shows the pending invitation', t.includes('customer@example.test') && t.includes('Invitation pending'), t.slice(-300));
     check('users page has clickable role boxes', await page.locator('nav.tab-boxes a.tab-box:has-text("Everyone")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Fleet managers")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Drivers")').count() === 1);
     await page.locator('nav.tab-boxes a.tab-box:has-text("Fleet managers")').click(); await page.waitForURL(/group=managers/); t = await text(page);
@@ -197,7 +203,7 @@ try {
   { const { context, page } = await session('driver@example.test');
     check('a driver lands on the driver dashboard', new URL(page.url()).pathname === '/driver', page.url());
     const nav = await page.locator('nav a').allInnerTexts();
-    check('a driver has only Driver dashboard, Drivers & licences and Claims / FNOL', JSON.stringify(nav.map(s => s.replace(/[^A-Za-z/& ]/g, '').trim())) === JSON.stringify(['Driver dashboard', 'Drivers & licences', 'Claims / FNOL']), JSON.stringify(nav));
+    check('a driver has only Driver dashboard, Drivers & licences, Claims / FNOL and the install guide', JSON.stringify(nav.map(s => s.replace(/[^A-Za-z/& ]/g, '').trim())) === JSON.stringify(['Driver dashboard', 'Drivers & licences', 'Claims / FNOL', 'Install on phone']), JSON.stringify(nav));
     const t = await text(page);
     check('driver sees the vehicle on cover now with dates, and earlier cover', t.includes('AB10XYZ') && t.includes('Ford Transit') && t.includes('01/01/2026') && t.includes('no end date') && t.includes('Previously on cover') && t.includes('ZZ99OLD') && t.includes('01/03/2026'), t.slice(0, 900));
     await go(page, base + '/fleet'); check('a driver cannot open the fleet register', new URL(page.url()).pathname === '/driver', page.url());

@@ -297,3 +297,9 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 ## IPT and cover permissions — decisions from Owen (24 Oct 2026)
 - **IPT**: the insurer quotes a daily rate plus IPT, so rates are entered excluding tax and IPT is added on top. Standard rate is 12% (unchanged since 1 June 2017, per GOV.UK); a 20% higher rate exists for travel insurance, appliance cover and some insurance sold alongside vehicles, not ordinary motor fleet cover. The billing rules form now pre-fills 0.12 (editable); saved reports show net, IPT and gross to insurer/platform roles. Existing reports keep the 0% they were generated with; only new billing rules and new reports use 12%. Neither insurer has billing rules yet, so nothing changes until each insurer saves them. Insurers should still confirm the treatment on their own policies.
 - **Insurer admins keep add and remove cover.** Decision confirmed by Owen; no change needed.
+
+## Installable app (PWA)
+- Web app manifest (`/manifest.webmanifest`), icons cut from the logo's S mark, iOS home-screen meta, and a minimal service worker (`public/sw.js`) that caches nothing (offline shows a plain message), so signed-in data is never stored by the app.
+- "Install on phone" page (`/install`) in the nav for every role including drivers: iPhone (Safari → Share → Add to Home Screen), Android (Chrome → Install app), desktop, plus a one-tap install button where the browser offers it.
+- Manifest, service worker and icons bypass the sign-in middleware so browsers can fetch them.
+- Not yet checked on a real phone: Owen to try the install on an iPhone and an Android.
