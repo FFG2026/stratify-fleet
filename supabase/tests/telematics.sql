@@ -8,7 +8,7 @@ declare
   R uuid := 'aaaaaaaa-0000-4000-8000-000000000001'; X uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
   f1 uuid := '20000000-0000-4000-8000-000000000001'; f2 uuid := '20000000-0000-4000-8000-000000000002'; i2 uuid := '10000000-0000-4000-8000-000000000003';
   vd uuid := '6da45364-78e4-4ebd-9ee4-4dd8f0ad66db';
-  reg text; res jsonb; n int; t text; checks int := 0; d0 text := to_char(now() - interval '3 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+  reg text; res jsonb; n int; t text; checks int := 0; d0 text := to_char(now() - interval '2 days', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
   rows jsonb;
 begin
   insert into auth.users (id, instance_id, aud, role, email) values
@@ -16,8 +16,8 @@ begin
     (X, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'x@x.test');
   insert into public.memberships (user_id, organisation_id, role, active) values (R, f2, 'fleet_admin', true), (X, i2, 'insurer_admin', true);
   select registration into reg from public.vehicles where id = vd;
-  -- the driver is assigned to the van for the whole period, so events can be matched to them
-  insert into public.vehicle_assignments (fleet_id, vehicle_id, user_id, assigned_from) values (f1, vd, D, current_date - 30);
+  -- the dev data already assigns D to this van from 23 Oct; a second overlapping row for the same person must still count as one driver
+  insert into public.vehicle_assignments (fleet_id, vehicle_id, user_id, assigned_from) values (f1, vd, D, current_date - 2);
   rows := jsonb_build_array(
     jsonb_build_object('type', 'trip', 'registration', lower(substr(reg,1,2) || ' ' || substr(reg,3)), 'at', d0, 'distance_miles', 120.5),
     jsonb_build_object('type', 'event', 'registration', reg, 'at', d0, 'kind', 'harsh_braking', 'severity', 2, 'location', 'A1 northbound'),

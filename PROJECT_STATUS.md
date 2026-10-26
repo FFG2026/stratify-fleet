@@ -321,5 +321,5 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Visibility: fleet admin/manager and platform read driver-level records. Insurer admin/claims read vehicle totals only; drivers are never named to the insurer. Drivers cannot see the page yet.
 - Score: 100 minus 2 per weighted event per 100 miles (speeding x2, severity 1–3; crash alerts shown, not scored); needs 50 miles. Indicative only, not an underwriting rating.
 - Crash alerts link to "Report a claim" (no prefill yet).
-- **Not applied to Supabase yet.** Apply the migration, then run `supabase/tests/telematics.sql` (ends with `TELEMATICS TESTS PASSED (n checks)`).
+- **Applied to Supabase (26 Oct 2026)**: `telematics` and `telematics_driver_distinct` (two overlapping assignments for the same person count as one driver). `supabase/tests/telematics.sql` passed on the live project (27 checks, rolled back).
 - Before using driver scores for real: DPIA, tell drivers (ICO worker-monitoring guidance), choose a first provider.
