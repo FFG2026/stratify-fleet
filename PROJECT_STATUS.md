@@ -314,3 +314,12 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - **Database:** migration `20261026160000_cue_queue.sql` (table `cue_submissions`, `queue_cue_submission`, `log_cue_download`, `private.cue_payload`). **Applied to the project on 26 Oct 2026** (via ChatGPT's Supabase connector; checks: table exists, RLS on, three functions present, 0 rows, security advisors show only the two expected authenticated SECURITY DEFINER warnings). Test still to run: `supabase/tests/cue.sql` (expects `CUE TESTS PASSED`); it has not been run.
 - **Verified:** typecheck, 68 unit tests (9 new for CUE wording/file naming), production build. **Not verified:** the migration and `cue.sql` against the database, the browser e2e suite, and real iPhone/desktop behaviour.
 - **Next:** onboard with the MIB as a data contributor (or confirm the insurer's own route), agree the field mapping, then add a connector that moves records from queued to submitted/accepted/rejected.
+
+## Telematics page (26 Oct 2026, branch feature/telematics)
+- New page `/telematics` (nav: Telematics). Provider-agnostic: **no telematics provider is connected**. Data comes in by CSV upload (template on the page); a provider feed can later call the same `import_telematics` function.
+- Migration `20261026200000_telematics.sql`: `telematics_events`, `telematics_trips`, permissions `telematics.read` / `telematics.manage`, `import_telematics()` (whole batch or nothing, duplicates skipped, max 2000 rows, driver matched from vehicle assignments, crash alert notifies the fleet, audited) and `telematics_vehicle_totals()` (vehicle level only).
+- Visibility: fleet admin/manager and platform read driver-level records. Insurer admin/claims read vehicle totals only; drivers are never named to the insurer. Drivers cannot see the page yet.
+- Score: 100 minus 2 per weighted event per 100 miles (speeding x2, severity 1–3; crash alerts shown, not scored); needs 50 miles. Indicative only, not an underwriting rating.
+- Crash alerts link to "Report a claim" (no prefill yet).
+- **Not applied to Supabase yet.** Apply the migration, then run `supabase/tests/telematics.sql` (ends with `TELEMATICS TESTS PASSED (n checks)`).
+- Before using driver scores for real: DPIA, tell drivers (ICO worker-monitoring guidance), choose a first provider.
