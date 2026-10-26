@@ -20,7 +20,7 @@ export default async function Fleet({ searchParams }: { searchParams: Promise<SP
       <PageHeader title="Vehicle register" subtitle="A single source of truth for every vehicle."
         actions={<><LinkButton href="/reconciliation">Open reconciliation →</LinkButton><LinkButton href="/changes" primary>＋ Add vehicle</LinkButton></>} />
       <div className="filters">
-        <form method="get" className="filters">
+        <form method="get" className="filters filters-inline">
           <label>Search vehicles<input name="q" type="search" maxLength={80} defaultValue={sp.q ?? ''} placeholder="Registration, make or model" /></label>
           {sp.policy && <input type="hidden" name="policy" value={sp.policy} />}
           {sp.status && <input type="hidden" name="status" value={sp.status} />}
