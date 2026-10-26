@@ -141,7 +141,7 @@ try {
     check('manifest is served without sign-in and is installable', man.ok() && manj.display === 'standalone' && manj.icons?.length >= 3 && manj.start_url === '/', JSON.stringify(manj).slice(0, 150));
     const sw = await page.request.get(base + '/sw.js'); check('service worker is served and caches nothing', sw.ok() && !(await sw.text()).includes('caches.'));
     await go(page, base + '/install'); t = await text(page);
-    check('install page explains iPhone, Android and desktop', t.includes('Add to Home Screen') && t.includes('Install app') && t.includes('Safari'), t.slice(0, 200));
+    check('install page explains iPhone, Android and desktop', t.includes('Add to Home Screen') && t.includes('Install app') && t.includes('Android') && t.includes('Safari'), t.slice(0, 200));
     await go(page, base + '/users?org=20000000-0000-4000-8000-000000000001'); t = await text(page);
     check('users page lists people and shows the pending invitation', t.includes('customer@example.test') && t.includes('Invitation pending'), t.slice(-300));
     check('users page has clickable role boxes', await page.locator('nav.tab-boxes a.tab-box:has-text("Everyone")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Fleet managers")').count() === 1 && await page.locator('nav.tab-boxes a.tab-box:has-text("Drivers")').count() === 1);
