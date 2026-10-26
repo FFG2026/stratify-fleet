@@ -59,6 +59,10 @@ try {
     await p.goto(base + '/fleet'); check('signed-out visitors are sent to the login page', new URL(p.url()).pathname === '/login', p.url());
     const r = await fetch(base + '/login'); const csp = r.headers.get('content-security-policy') || '';
     check('login page sends a nonce-based CSP with no unsafe inline scripts', /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/.test(csp) && !/script-src[^;]*unsafe-inline/.test(csp) && /frame-ancestors 'none'/.test(csp), csp);
+    await p.fill('input[name=password]', 'visible-check');
+    check('login password is hidden until Show is pressed', await p.getAttribute('input[name=password]', 'type') === 'password');
+    await p.click('button.password-toggle'); check('Show reveals the typed password and the button becomes Hide', await p.getAttribute('input[name=password]', 'type') === 'text' && (await p.textContent('button.password-toggle')) === 'Hide');
+    await p.click('button.password-toggle'); check('Hide hides it again', await p.getAttribute('input[name=password]', 'type') === 'password');
     await p.fill('input[name=email]', 'platform@example.test'); await p.fill('input[name=password]', 'wrong'); await p.click('button.primary');
     await p.waitForSelector('[role=alert]:has-text("Unable to sign in")'); check('wrong password gives one generic message', true);
     await c.close(); }
