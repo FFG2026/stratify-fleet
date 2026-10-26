@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
 const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; fleet?: boolean; admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean })[] = [
   { href: '/overview', label: 'Platform overview', icon: '◈', platform: true },
   { href: '/insurer', label: 'Insurer dashboard', icon: '▦', insurer: true },
-  { href: '/customer', label: 'Fleet dashboard', icon: '⌂' },
+  { href: '/customer', label: 'Fleet dashboard', icon: '⌂', fleet: true },
   { href: '/fleet', label: 'Vehicle register', icon: '▤' },
   { href: '/changes', label: 'Manage cover', icon: '⇄', fleet: true },
   { href: '/reconciliation', label: 'Reconciliation', icon: '▥' },

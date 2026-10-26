@@ -184,6 +184,8 @@ try {
     let t = await text(page);
     check('insurer sees only their own customers', t.includes('Northbank Logistics') && t.includes('Riverside Couriers') && !t.includes('Hilltop Plumbing'), t.slice(-400));
     check('insurer menu hides the platform overview', !(await page.locator('nav a').allInnerTexts()).some(x => /Platform overview/.test(x)));
+    check('insurer menu has no Fleet dashboard (it duplicated the insurer dashboard)', !(await page.locator('nav a').allInnerTexts()).some(x => /Fleet dashboard/.test(x)));
+    await go(page, base + '/customer'); check('an insurer opening the fleet dashboard address lands on the insurer dashboard', new URL(page.url()).pathname === '/insurer', page.url());
     check('insurer has no insurer picker', await page.locator('select').filter({ hasText: 'All authorised insurers' }).count() === 0);
     await go(page, base + '/overview'); t = await text(page);
     check('insurer cannot use the platform overview', t.includes('requires platform administrator'), t.slice(-300));
