@@ -72,4 +72,4 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|stratify-logo.png).*)'] };
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico|stratify-logo.png|sw.js|manifest.webmanifest|icon-192.png|icon-512.png|icon-maskable-512.png|apple-touch-icon.png).*)'] };

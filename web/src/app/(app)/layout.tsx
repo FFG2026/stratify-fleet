@@ -28,7 +28,8 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/branding', label: 'Branding', icon: '◐', platform: true },
   { href: '/audit', label: 'Audit log', icon: '☰', audit: true },
   { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true },
-  { href: '/users', label: 'Users', icon: '◎', admin: true }
+  { href: '/users', label: 'Users', icon: '◎', admin: true },
+  { href: '/install', label: 'Install on phone', icon: '▯' }
 ];
 const planned: NavItem[] = [
   { href: '/drivers', label: 'Drivers & licences', soon: true },
@@ -48,7 +49,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const driverNav: NavItem[] = [
     { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
     { href: '/drivers', label: 'Drivers & licences', icon: '◎' },
-    { href: '/claims', label: 'Claims / FNOL', icon: '⚑' }
+    { href: '/claims', label: 'Claims / FNOL', icon: '⚑' },
+    { href: '/install', label: 'Install on phone', icon: '▯' }
   ];
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
