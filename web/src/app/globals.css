@@ -237,3 +237,4 @@ label.inline input[type=radio],label.inline input[type=checkbox]{width:auto;marg
 .password-field input{padding-right:64px}
 .password-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;min-height:32px}
 label .password-field input{margin-top:0}
+.filters.filters-inline{margin-bottom:0;flex:1 1 auto;min-width:0}
