@@ -3,6 +3,7 @@ import { rest } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { getMyCover, isDriverOnly, isInsurerSide, rolesOf } from '@/lib/data';
 import type { Context } from '@/lib/types';
+import type { CueSubmission } from '@/lib/cue';
 
 export type Side = 'driver' | 'fleet' | 'insurer';
 // Which view of claims the person gets. Insurer staff and platform administrators see claims that have been sent to them.
@@ -69,6 +70,14 @@ export async function getCoverRecord(vehicleId: string | null, incidentAt: strin
   if (inForce) return { startedAt: inForce.cover_start, recordedAt: inForce.first_recorded_at ?? inForce.created_at, after: Date.parse(inForce.first_recorded_at ?? inForce.created_at) > at };
   const later = rows.find(r => Date.parse(r.cover_start) > at);
   return later ? { startedAt: null, recordedAt: later.first_recorded_at ?? later.created_at, after: true } : null;
+}
+// CUE records for a claim, newest first. Row-level security returns rows only to the insurer side.
+export async function getCueSubmissions(claimId: string) {
+  return rest<CueSubmission[]>(`/rest/v1/cue_submissions?select=id,claim_id,version,submission_status,status_detail,external_reference,created_at&claim_id=eq.${checkedId(claimId)}&order=version.desc&limit=50`);
+}
+export async function getCueRecord(id: string) {
+  const rows = await rest<(CueSubmission & { payload: unknown; claim_reference?: string })[]>(`/rest/v1/cue_submissions?select=id,claim_id,version,submission_status,status_detail,external_reference,created_at,payload&id=eq.${checkedId(id)}`);
+  return rows[0] ?? null;
 }
 export async function getClaimBasic(id: string) {
   const rows = await rest<Pick<ClaimRow, 'id' | 'fleet_id' | 'status'>[]>('/rest/v1/claims?select=id,fleet_id,status&id=eq.' + checkedId(id));

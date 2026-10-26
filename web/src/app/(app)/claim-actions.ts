@@ -221,6 +221,19 @@ export async function reopenClaim(form: FormData): Promise<ClaimResult> {
   catch (error) { return fail(error); }
 }
 
+// One press: prepare the CUE record from this claim's FNOL data and queue it. Insurer side only; the database checks who is acting.
+export async function queueCue(form: FormData): Promise<ClaimResult> {
+  try {
+    await requireContext();
+    const id = checkedId(form.get('id'));
+    await rpc('queue_cue_submission', { p_claim: id });
+    refresh();
+    revalidatePath('/claims/' + id);
+    revalidatePath('/integrations');
+    return done('Queued for CUE. Nothing has been transmitted: the portal is not connected to CUE yet.', id);
+  } catch (error) { return fail(error); }
+}
+
 export async function markNoticesRead(): Promise<ClaimResult> {
   try { await requireContext(); await rpc('mark_notifications_read', { p_ids: null }); revalidatePath('/claims'); return done('Done.'); }
   catch (error) { return fail(error); }

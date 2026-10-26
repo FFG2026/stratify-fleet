@@ -5,9 +5,10 @@ import { useAction } from '@/components/useAction';
 import { shrink } from '@/lib/shrink';
 import {
   reportClaim, updateClaim, addParty, removeParty, uploadClaimFile, removeClaimFile, reviewClaim, sendClaim, withdrawClaim, addNote, answerRequest,
-  startReview, askForInformation, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead
+  startReview, askForInformation, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue
 } from '@/app/(app)/claim-actions';
 import { insurerOutcomes, outcomeLabel } from '@/lib/claims';
+import { cueNotConnected, cueStatusLabel, type CueSubmission } from '@/lib/cue';
 
 const note = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={'form-note' + (r && !r.ok ? ' form-error' : '')}>{r?.message}</div>;
 const photoAccept = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf';
@@ -296,6 +297,34 @@ export function InsurerPanel({ claim, status, reference }: { claim: string; stat
     </div>
   );
 }
+// One press prepares the CUE record from this claim's FNOL data and queues it. Nothing is transmitted: the portal is not connected to CUE.
+export function CuePanel({ claim, submissions, hasReference }: { claim: string; submissions: CueSubmission[]; hasReference: boolean }) {
+  const queue = useAction(queueCue, false);
+  const latest = submissions[0];
+  const date = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
+  return (
+    <div className="review">
+      <p className="subtext">{cueNotConnected}</p>
+      {!hasReference && <p className="subtext">Tip: save your own claim reference above first, so it is included in the record.</p>}
+      <form onSubmit={queue.onSubmit}>
+        <input type="hidden" name="id" value={claim} />
+        <div className="actions"><button disabled={queue.pending}>{latest ? 'Queue an updated CUE record' : 'Queue for CUE'}</button></div>
+        {note(queue.result)}
+      </form>
+      {submissions.length > 0 && (
+        <ul className="doclist">
+          {submissions.map(s => (
+            <li key={s.id}>
+              <strong>Version {s.version}</strong><span className="subtext"> · {cueStatusLabel[s.submission_status] ?? s.submission_status} · {date(s.created_at)}{s.external_reference ? ` · CUE reference ${s.external_reference}` : ''} · </span>
+              <a href={`/claims/cue/${s.id}`} download>Download record</a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function WithdrawQuestion({ claim, request }: { claim: string; request: string }) {
   const { pending, run } = useAction(withdrawQuestion);
   return <button type="button" disabled={pending} onClick={() => { const f = new FormData(); f.set('id', claim); f.set('request', request); run(f); }}>Withdraw question</button>;
