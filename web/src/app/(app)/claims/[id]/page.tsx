@@ -5,7 +5,8 @@ import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
 import { PageHeader, Badge, Notice, LinkButton } from '@/components/ui';
-import { AnswerForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
+import { itemProgress, itemTitle, type RequestItem } from '@/lib/claim-items';
+import { AnswerForm, ItemBadge, ItemChecklist, RequestItemsForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
 import { ClockList } from '@/components/InboxViews';
 import { inboxFromClaim, listClaimHandlers } from '@/lib/claims-data';
 import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPriyaId, isDemoInboxClaim } from '@/lib/demo-inbox';
@@ -26,7 +27,8 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   if (ctx.demo || (side === 'insurer' && isDemoInboxClaim(id))) return <DemoClaim ctx={ctx} id={id} />;
   const data = await getClaim(id).catch(() => null);
   if (!data) notFound();
-  const { claim: c, parties, events, requests, files } = data;
+  const { claim: c, parties, events, requests, files, items } = data;
+  const itemsOf = (rid: string): RequestItem[] => items.filter(i => i.request_id === rid);
   const sp = await searchParams;
   const me = ctx.user.id;
   const status = c.status as ClaimStatus;
@@ -71,7 +73,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
             <div key={r.id} className="request open">
               <p><strong>{r.question}</strong></p>
               <p className="subtext">Asked {londonDateTime(r.requested_at)}{r.due_on ? ` · needed by ${new Date(r.due_on + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' })}` : ''}</p>
-              <AnswerForm claim={c.id} request={r.id} />
+              {itemsOf(r.id).length > 0 ? <ItemChecklist claim={c.id} request={r.id} items={itemsOf(r.id)} /> : <AnswerForm claim={c.id} request={r.id} />}
             </div>
           ))}
         </div></section>
@@ -168,12 +170,18 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
 
       {requests.length > 0 && (
         <section className="panel"><div className="panel-body">
-          <div className="cardhead"><h2>Questions from the insurer</h2><Badge warn={openRequests.length > 0}>{openRequests.length} open</Badge></div>
+          <div className="cardhead"><h2>{side === 'insurer' ? 'Questions and requests you have sent' : 'Questions from the insurer'}</h2><Badge warn={openRequests.length > 0}>{openRequests.length} open</Badge></div>
           <ul className="requests">
             {requests.map(r => (
               <li key={r.id}>
                 <p><strong>{r.question}</strong> <Badge warn={!r.answered_at && !r.cancelled_at}>{r.cancelled_at ? 'Withdrawn' : r.answered_at ? 'Answered' : 'Waiting for the fleet'}</Badge></p>
                 <p className="subtext">Asked {londonDateTime(r.requested_at)}{r.due_on ? ` · needed by ${new Date(r.due_on + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' })}` : ''}</p>
+                {itemsOf(r.id).length > 0 && (
+                  <>
+                    <p className="subtext">{itemProgress(itemsOf(r.id)).done} of {itemsOf(r.id).length} received</p>
+                    <ul className="item-list">{itemsOf(r.id).map(i => <li key={i.id} className="item-row"><strong>{itemTitle(i)}</strong> <ItemBadge item={i} />{i.unavailable_reason && <span className="subtext"> · {i.unavailable_reason}</span>}</li>)}</ul>
+                  </>
+                )}
                 {r.answer && <p className="answer-text">{r.answer}</p>}
                 {side === 'insurer' && !r.answered_at && !r.cancelled_at && open && <WithdrawQuestion claim={c.id} request={r.id} />}
               </li>
@@ -221,6 +229,27 @@ function DemoClaim({ ctx, id }: { ctx: NonNullable<Awaited<ReturnType<typeof get
         <AssignForm claim={claim.id} me={ctx.user.id} handlerId={claim.handler_id} handlers={handlers} disabled />
       </div></section>
       <ClockList claim={claim} now={now} />
+      <section className="panel"><div className="panel-body">
+        <div className="cardhead"><h2>Requests sent to the fleet</h2><Badge warn>1 open</Badge></div>
+        <ul className="requests"><li>
+          <p><strong>Please send: photos of the damage, repair estimate</strong> <Badge warn>Waiting for the fleet</Badge></p>
+          <p className="subtext">Sample · 1 of 2 received · needed by 3 days from now</p>
+          <ul className="item-list">
+            <li className="item-row received"><strong>Photos of the damage</strong> <span className="badge">Received</span></li>
+            <li className="item-row waiting"><strong>Repair estimate</strong> <span className="badge warning">Waiting</span></li>
+          </ul>
+        </li></ul>
+        <details className="withdraw" open><summary>Ask for specific photos or documents</summary><fieldset disabled className="demo-disabled"><RequestItemsForm claim={claim.id} /></fieldset></details>
+      </div></section>
+      <section className="panel"><div className="panel-body">
+        <h2>Notes and activity</h2>
+        <ol className="timeline">
+          <li><div><strong>Note for the fleet</strong> <span className="subtext">· Sample insurer handler</span></div><p>Thanks for reporting this. Could you send a few more photos of the rear bumper, and the repair estimate when you have it?</p></li>
+          <li><div><strong>Information provided</strong> <span className="subtext">· Sample fleet</span></div><p>Photos uploaded. Estimate to follow once the garage has quoted.</p></li>
+          <li><div><strong>Internal note</strong> <span className="subtext">· Sample</span> <span className="badge">Only the insurer</span></div><p>Cover added after incident. Check with the fleet before deciding.</p></li>
+        </ol>
+        <p className="subtext">Sample notes and requests on a fictional claim. Nothing here is saved.</p>
+      </div></section>
       <section className="panel"><div className="panel-body">
         <h2>What happened</h2>
         <p>{demoClaimNote(claim.id)}</p>

@@ -348,6 +348,22 @@ try {
     check('the fleet answers and the claim returns to review', (await calls()).some(c => c.rpc === 'respond_claim_request'));
     await context.close(); }
   { const { context, page } = await session('insurer@example.test');
+    await go(page, base + claimUrl);
+    await page.click('summary:has-text("Ask for specific photos or documents")');
+    await page.check('input[name=item][value=photos]'); await page.check('input[name=item][value=estimate]');
+    await page.click('button:has-text("Send request")'); await page.waitForTimeout(1500); let t = await text(page);
+    check('the insurer can request specific photos and documents', (await calls()).some(c => c.rpc === 'request_claim_items' && c.body.p_items.length === 2) && /0 of 2 received/.test(t), t.slice(0, 600));
+    await context.close(); }
+  { const { context, page } = await session('customer@example.test');
+    await go(page, base + claimUrl); let t = await text(page);
+    check('the fleet sees a checklist for the requested items', t.includes('Photos') && t.includes('Waiting') && await page.locator('button:has-text("We cannot supply this")').count() === 2, t.slice(0, 700));
+    await page.locator('button:has-text("We cannot supply this")').last().click();
+    await page.fill('input[name=reason]', 'Garage has not quoted yet.'); await page.click('button:has-text("Tell the insurer")'); await page.waitForTimeout(1500);
+    check('the fleet can say an item cannot be supplied', (await calls()).some(c => c.rpc === 'fulfil_request_item' && c.body.p_unavailable));
+    await page.locator('input[type=file]').first().setInputFiles([{ name: 'rear.png', mimeType: 'image/png', buffer: PNG }]); await page.waitForTimeout(2500); t = await text(page);
+    check('uploading a file ticks the item and closes the request', (await calls()).some(c => c.rpc === 'fulfil_request_item' && c.body.p_attachment) && !t.includes('The insurer needs more information'), t.slice(0, 700));
+    await context.close(); }
+  { const { context, page } = await session('insurer@example.test');
     await go(page, base + claimUrl); let t = await text(page);
     check('the insurer sees the answer', t.includes('Footage attached by email'), t.slice(0, 500));
     await page.click('summary:has-text("Close this claim")'); await page.selectOption('select[name=outcome]', 'settled'); await page.fill('textarea[name=note]', 'Settled with the other party\'s insurer.'); await page.click('button:has-text("Close claim")'); await page.waitForTimeout(1500); t = await text(page);

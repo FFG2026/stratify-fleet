@@ -1,4 +1,5 @@
 import 'server-only';
+import type { RequestItem } from '@/lib/claim-items';
 import { rest, rpc } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { getMyCover, isDriverOnly, isInsurerSide, rolesOf } from '@/lib/data';
@@ -57,14 +58,15 @@ export async function countClaims(filter: string) {
 
 export async function getClaim(id: string) {
   const c = checkedId(id);
-  const [claims, parties, events, requests, files] = await Promise.all([
+  const [claims, parties, events, requests, files, items] = await Promise.all([
     rest<ClaimRow[]>('/rest/v1/claims?select=*,' + HANDLING + '&id=eq.' + c),
     rest<ClaimParty[]>(`/rest/v1/claim_parties?select=*&claim_id=eq.${c}&order=created_at.asc&limit=50`),
     rest<ClaimEvent[]>(`/rest/v1/claim_events?select=id,kind,side,visibility,actor_label,actor_email,body,created_at&claim_id=eq.${c}&order=created_at.asc&limit=500`),
     rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,question,due_on,requested_at,answered_at,answer,cancelled_at&claim_id=eq.${c}&order=requested_at.asc&limit=100`),
-    rest<ClaimFile[]>(`/rest/v1/claim_attachments?select=id,request_id,kind,file_name,content_type,size_bytes,caption,uploaded_by,uploaded_side,uploaded_at&claim_id=eq.${c}&order=uploaded_at.asc&limit=100`)
+    rest<ClaimFile[]>(`/rest/v1/claim_attachments?select=id,request_id,kind,file_name,content_type,size_bytes,caption,uploaded_by,uploaded_side,uploaded_at&claim_id=eq.${c}&order=uploaded_at.asc&limit=100`),
+    rest<RequestItem[]>(`/rest/v1/claim_request_items?select=id,request_id,kind,label,created_at,fulfilled_at,attachment_id,unavailable_reason&claim_id=eq.${c}&order=created_at.asc&limit=100`)
   ]);
-  return claims[0] ? { claim: withHandling(claims[0]), parties, events, requests, files } : null;
+  return claims[0] ? { claim: withHandling(claims[0]), parties, events, requests, files, items } : null;
 }
 // When the portal recorded the cover that applied at the time of the incident. A vehicle added after the incident is flagged
 // to the people reading the claim. This is information from the portal's own records, not a decision about cover.
