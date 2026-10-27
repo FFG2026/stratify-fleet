@@ -29,7 +29,7 @@ export function formatFrequency(value: number | null): string {
 
 export function bookTotals(rows: BookFleetRow[]) {
   const earnedParts = rows.map(r => r.earned_ytd);
-  const earned = earnedParts.every(v => v === null) ? null : earnedParts.reduce((a, b) => a + (b ?? 0), 0);
+  const earned = earnedParts.every(v => v === null) ? null : earnedParts.reduce<number>((sum, v) => sum + (v ?? 0), 0);
   const onCover = rows.reduce((a, r) => a + r.on_cover, 0);
   const claims12m = rows.reduce((a, r) => a + r.claims_12m, 0);
   return {

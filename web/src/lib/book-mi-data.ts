@@ -1,7 +1,7 @@
 import 'server-only';
 import { rest } from '@/lib/rest';
-import { getCoveredVehicles, type FleetOverviewRow } from '@/lib/data';
-import type { Context } from '@/lib/types';
+import { getCoveredVehicles } from '@/lib/data';
+import type { Context, FleetOverviewRow } from '@/lib/types';
 import { today } from '@/lib/dates';
 import { checkedId } from '@/lib/ids';
 import { medianMs, type BookFleetRow } from '@/lib/book-mi';
