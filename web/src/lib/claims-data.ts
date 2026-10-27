@@ -1,5 +1,5 @@
 import 'server-only';
-import { rest } from '@/lib/rest';
+import { rest, rpc } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { getMyCover, isDriverOnly, isInsurerSide, rolesOf } from '@/lib/data';
 import type { Context } from '@/lib/types';
@@ -8,10 +8,10 @@ import type { CueSubmission } from '@/lib/cue';
 export type Side = 'driver' | 'fleet' | 'insurer';
 // Which view of claims the person gets. Insurer staff and platform administrators see claims that have been sent to them.
 export const claimSide = (ctx: Context): Side | null =>
-  ctx.demo ? null : isDriverOnly(ctx) ? 'driver' : rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r)) ? 'insurer'
+  ctx.demo ? 'insurer' : isDriverOnly(ctx) ? 'driver' : rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r)) ? 'insurer'
     : rolesOf(ctx).some(r => ['fleet_admin', 'fleet_manager'].includes(r)) ? 'fleet' : null;
-export const canReportClaims = (ctx: Context) => { const s = claimSide(ctx); return s === 'driver' || s === 'fleet'; };
-export const canLogClaims = (ctx: Context) => claimSide(ctx) === 'insurer';
+export const canReportClaims = (ctx: Context) => { const s = claimSide(ctx); return !ctx.demo && (s === 'driver' || s === 'fleet'); };
+export const canLogClaims = (ctx: Context) => !ctx.demo && claimSide(ctx) === 'insurer';
 export const claimFleetOf = (ctx: Context) => ctx.memberships.find(m => m.active && ['fleet_admin', 'fleet_manager', 'driver'].includes(m.role))?.organisation_id ?? null;
 export { isInsurerSide };
 
@@ -23,10 +23,11 @@ export type ClaimRow = {
   on_cover_at_incident: boolean | null; no_photos_confirmed: boolean; assessed_at: string | null; assessment_notes: string | null;
   submitted_at: string | null; insurer_reference: string | null; closed_at: string | null; outcome: string | null; outcome_note: string | null;
   created_at: string; updated_at: string;
+  handler_id?: string | null; handler_email?: string | null; assigned_at?: string | null; first_touched_at?: string | null;
 };
 export type ClaimParty = { id: string; claim_id: string; kind: 'third_party' | 'witness'; name: string; phone: string | null; vehicle_registration: string | null; insurer_name: string | null; injured: boolean | null; notes: string | null; added_by: string };
 export type ClaimEvent = { id: string; kind: string; side: 'driver' | 'fleet' | 'insurer'; visibility: string; actor_label: string | null; actor_email: string | null; body: string | null; created_at: string };
-export type ClaimRequest = { id: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null };
+export type ClaimRequest = { id: string; claim_id?: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null };
 export type ClaimFile = { id: string; request_id: string | null; kind: 'photo' | 'document'; file_name: string; content_type: string; size_bytes: number; caption: string | null; uploaded_by: string; uploaded_side: Side; uploaded_at: string };
 export type Notice = { id: string; claim_id: string | null; kind: string; title: string; body: string | null; created_at: string; read_at: string | null };
 
@@ -124,4 +125,35 @@ export async function myVehicleIdByRegistration(registration: string): Promise<s
 export async function unreadCount(): Promise<number> {
   try { return (await rest<{ rows: unknown[]; total: number }>('/rest/v1/my_notifications?select=id&read_at=is.null&limit=1', { count: true })).total; }
   catch { return 0; }
+}
+
+export type ClaimHandler = { user_id: string; email: string; role: string };
+
+function toInbox(row: ClaimRow, request: ClaimRequest | null, coverAfter: boolean): import('@/lib/inbox').InboxClaim {
+  return {
+    id: row.id, reference: row.reference, fleet_id: row.fleet_id, registration: row.registration,
+    driver_name: row.driver_name, status: row.status, anyone_injured: row.anyone_injured, incident_at: row.incident_at,
+    submitted_at: row.submitted_at, updated_at: row.updated_at,
+    handler_id: row.handler_id ?? null, handler_email: row.handler_email ?? null,
+    assigned_at: row.assigned_at ?? null, first_touched_at: row.first_touched_at ?? null,
+    cover_after: coverAfter, open_request: request ? { id: request.id, due_on: request.due_on, requested_at: request.requested_at } : null
+  };
+}
+
+export async function listInboxClaims() {
+  const rows = await rest<ClaimRow[]>('/rest/v1/claims?select=*&status=neq.closed&submitted_at=not.is.null&order=updated_at.desc&limit=500');
+  if (!rows.length) return [];
+  const ids = rows.map(r => checkedId(r.id)).join(',');
+  const requests = await rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,claim_id,question,due_on,requested_at,answered_at,cancelled_at&answered_at=is.null&cancelled_at=is.null&claim_id=in.(${ids})&limit=500`).catch(() => []);
+  return rows.map(r => toInbox(r, requests.find(q => q.claim_id === r.id && !q.answered_at && !q.cancelled_at) ?? null, r.on_cover_at_incident === false));
+}
+
+export function inboxFromClaim(row: ClaimRow, requests: ClaimRequest[], coverAfter: boolean) {
+  const open = requests.find(r => !r.answered_at && !r.cancelled_at) ?? null;
+  return toInbox(row, open, coverAfter);
+}
+
+export async function listClaimHandlers(claimId: string): Promise<ClaimHandler[]> {
+  try { return await rpc<ClaimHandler[]>('list_claim_handlers', { p_claim: checkedId(claimId) }); }
+  catch { return []; }
 }

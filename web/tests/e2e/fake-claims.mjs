@@ -24,7 +24,8 @@ export function createClaims(ids) {
     registration: b.p_registration, driver_user_id: origin === 'driver' ? u.id : b.p_driver || null, driver_name: origin === 'driver' ? 'Dana Driver' : b.p_driver_name || null, origin, reported_by: u.id, status,
     incident_at: b.p_incident_at, location: b.p_location, description: b.p_description, anyone_injured: b.p_injured, injury_details: b.p_injury_details, police_attended: b.p_police, police_reference: b.p_police_ref,
     vehicle_driveable: b.p_driveable ?? null, third_party_involved: b.p_third_party ?? null, on_cover_at_incident: b.p_vehicle ? true : null, no_photos_confirmed: false, assessed_at: null, assessment_notes: null,
-    submitted_at: null, insurer_reference: null, closed_at: null, outcome: null, outcome_note: null, created_at: now(), updated_at: now()
+    submitted_at: null, insurer_reference: null, closed_at: null, outcome: null, outcome_note: null, created_at: now(), updated_at: now(),
+    handler_id: null, handler_email: null, assigned_at: null, first_touched_at: null
   });
   const checkFields = b => {
     if (b.p_injured === null || b.p_injured === undefined) throw err('say whether anyone was injured');
@@ -46,7 +47,9 @@ export function createClaims(ids) {
       case 'log_insurer_claim': {
         checkFields(b);
         if (!(u.see === 'all' || u.see.includes(b.p_fleet))) throw err('permission denied');
-        const c = base(b, u, 'insurer', 'under_review'); c.submitted_at = now(); c.insurer_reference = b.p_insurer_ref; db.claims.push(c); event(c, 'logged_by_insurer', 'insurer', 'shared', 'Logged by the insurer.', email);
+        const c = base(b, u, 'insurer', 'under_review'); c.submitted_at = now(); c.insurer_reference = b.p_insurer_ref;
+        c.handler_id = u.id; c.handler_email = email; c.assigned_at = now(); c.first_touched_at = now();
+        db.claims.push(c); event(c, 'logged_by_insurer', 'insurer', 'shared', 'Logged by the insurer.', email);
         notice('fleet:' + c.fleet_id, c, 'claim_logged', 'A claim has been logged by your insurer', c.reference + ' · ' + c.registration);
         return c.id;
       }
@@ -90,12 +93,17 @@ export function createClaims(ids) {
       case 'withdraw_claim': { const c = find(b.p_claim); if (String(b.p_note || '').length < 3) throw err('say why this report is being withdrawn'); c.status = 'closed'; c.closed_at = now(); c.outcome = 'withdrawn'; event(c, 'closed', 'fleet', 'shared', 'Withdrawn by the fleet before it was sent: ' + b.p_note, email); touch(c); return null; }
       case 'start_claim_review': {
         const c = find(b.p_claim); if (c.status === 'submitted') { c.status = 'under_review'; event(c, 'status_changed', 'insurer', 'shared', 'The insurer is reviewing this claim.', email); notice('fleet:' + c.fleet_id, c, 'claim_status', c.reference + ' is being reviewed by the insurer', null); }
-        if (b.p_insurer_ref) c.insurer_reference = b.p_insurer_ref; touch(c); return null;
+        if (b.p_insurer_ref) c.insurer_reference = b.p_insurer_ref;
+        if (!c.handler_id) { c.handler_id = u.id; c.handler_email = email; c.assigned_at = now(); }
+        if (!c.first_touched_at) c.first_touched_at = now();
+        touch(c); return null;
       }
       case 'request_claim_info': {
         const c = find(b.p_claim); if (c.status === 'closed') throw err('this claim is closed; reopen it first');
         const id = uid(); db.requests.push({ id, claim_id: c.id, question: b.p_question, due_on: b.p_due, requested_at: now(), answered_at: null, answer: null, cancelled_at: null });
         c.status = 'awaiting_information'; event(c, 'info_requested', 'insurer', 'shared', b.p_question, email);
+        if (!c.handler_id) { c.handler_id = u.id; c.handler_email = email; c.assigned_at = now(); }
+        if (!c.first_touched_at) c.first_touched_at = now();
         notice('fleet:' + c.fleet_id, c, 'info_requested', 'The insurer needs more information on ' + c.reference, b.p_question); touch(c); return id;
       }
       case 'cancel_claim_request': { const r = db.requests.find(x => x.id === b.p_request); r.cancelled_at = now(); const c = find(r.claim_id); settle(c); event(c, 'info_cancelled', 'insurer', 'shared', 'The insurer withdrew a question: ' + r.question, email); return null; }
@@ -112,6 +120,26 @@ export function createClaims(ids) {
       }
       case 'reopen_claim': { const c = find(b.p_claim); c.status = 'under_review'; c.closed_at = null; c.outcome = null; event(c, 'reopened', 'insurer', 'shared', 'Reopened by the insurer. ' + b.p_note, email); touch(c); return null; }
       case 'mark_notifications_read': { for (const n of db.notices) if (mineNotice(n, u)) n.read[u.id] = now(); return null; }
+      case 'assign_claim_handler': {
+        const c = find(b.p_claim);
+        if (!c.submitted_at || !(u.see === 'all' || u.see.includes(c.fleet_id))) throw err('permission denied');
+        if (c.status === 'closed') throw err('this claim is closed; reopen it first');
+        if (!b.p_handler) {
+          c.handler_id = null; c.handler_email = null; c.assigned_at = null;
+          event(c, 'handler_assigned', 'insurer', 'insurer', 'Returned to the unassigned pile.', email); touch(c); return null;
+        }
+        c.handler_id = b.p_handler; c.handler_email = b.p_handler === u.id ? email : 'priya.khan@example.test'; c.assigned_at = now();
+        if (b.p_handler === u.id && !c.first_touched_at) c.first_touched_at = now();
+        event(c, 'handler_assigned', 'insurer', 'insurer', b.p_handler === u.id ? 'Taken by the handler.' : 'Assigned to a colleague.', email); touch(c); return null;
+      }
+      case 'list_claim_handlers': {
+        const c = find(b.p_claim);
+        if (!c.submitted_at || !(u.see === 'all' || u.see.includes(c.fleet_id))) throw err('permission denied');
+        return [
+          { user_id: u.id, email, role: u.role },
+          { user_id: 'aaaaaaaa-0000-4000-8000-000000000010', email: 'priya.khan@example.test', role: 'insurer_claims' }
+        ];
+      }
       default: return undefined;
     }
   }
@@ -128,12 +156,32 @@ export function createClaims(ids) {
       else if (st === 'eq.closed') rows = rows.filter(c => c.status === 'closed');
       else if (st.startsWith('in.(')) { const list = st.slice(4, -1).split(','); rows = rows.filter(c => list.includes(c.status)); }
       if (eq('anyone_injured') === 'true') rows = rows.filter(c => c.anyone_injured);
-      const or = q.get('or'); if (or) { const m = /reference\.ilike\.\*(.*?)\*,/.exec(or); const term = (m ? m[1] : '').toLowerCase(); rows = rows.filter(c => c.reference.toLowerCase().includes(term) || c.registration.toLowerCase().includes(term)); }
+      const submitted = q.getAll('submitted_at');
+      if (submitted.includes('not.is.null')) rows = rows.filter(c => c.submitted_at);
+      const gte = submitted.find(v => v.startsWith('gte.'));
+      if (gte) rows = rows.filter(c => c.submitted_at && Date.parse(c.submitted_at) >= Date.parse(gte.slice(4)));
+      const fleet = q.get('fleet_id') || '';
+      if (fleet.startsWith('eq.')) rows = rows.filter(c => c.fleet_id === fleet.slice(3));
+      if (fleet.startsWith('in.(')) { const list = fleet.slice(4, -1).split(','); rows = rows.filter(c => list.includes(c.fleet_id)); }
+      const or = q.get('or');
+      if (or && /ilike/.test(or)) { const m = /reference\.ilike\.\*(.*?)\*,/.exec(or); const term = (m ? m[1] : '').toLowerCase(); rows = rows.filter(c => c.reference.toLowerCase().includes(term) || c.registration.toLowerCase().includes(term)); }
+      if (or && /status\.neq\.closed/.test(or)) {
+        const since = /submitted_at\.gte\.([^)]+)/.exec(or);
+        const from = since ? Date.parse(since[1]) : 0;
+        rows = rows.filter(c => c.status !== 'closed' || (c.submitted_at && Date.parse(c.submitted_at) >= from));
+      }
       return rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     }
     const claimOf = () => { const c = db.claims.find(x => x.id === eq('claim_id')); return c && visible(c, u) ? c : null; };
     if (path === 'claim_parties') return claimOf() ? db.parties.filter(p => p.claim_id === eq('claim_id') && !p.deleted) : [];
-    if (path === 'claim_requests') return claimOf() ? db.requests.filter(r => r.claim_id === eq('claim_id')) : [];
+    if (path === 'claim_requests') {
+      const raw = q.get('claim_id') || '';
+      const ids = raw.startsWith('in.(') ? raw.slice(4, -1).split(',') : raw.startsWith('eq.') ? [raw.slice(3)] : [];
+      let rows = db.requests.filter(r => (!ids.length || ids.includes(r.claim_id)) && db.claims.some(c => c.id === r.claim_id && visible(c, u)));
+      if (q.get('answered_at') === 'is.null') rows = rows.filter(r => !r.answered_at);
+      if (q.get('cancelled_at') === 'is.null') rows = rows.filter(r => !r.cancelled_at);
+      return rows;
+    }
     if (path === 'claim_attachments') {
       if (eq('id')) { const f = db.files.find(x => x.id === eq('id') && !x.deleted); const c = f && db.claims.find(x => x.id === f.claim_id); return f && c && visible(c, u) ? [f] : []; }
       return claimOf() ? db.files.filter(f => f.claim_id === eq('claim_id') && !f.deleted) : [];

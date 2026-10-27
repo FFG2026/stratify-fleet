@@ -1,13 +1,16 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, countClaims, getNotices, listClaims, canLogClaims, canReportClaims, type ClaimRow } from '@/lib/claims-data';
-import { statusLabel, needsFleetAction, needsInsurerAction, type ClaimStatus } from '@/lib/claims';
+import { claimSide, countClaims, getNotices, listClaims, listInboxClaims, canLogClaims, canReportClaims, type ClaimRow } from '@/lib/claims-data';
+import { statusLabel, needsFleetAction, type ClaimStatus } from '@/lib/claims';
 import { PageHeader, Badge, Notice, Stats, LinkButton, Pagination } from '@/components/ui';
 import { MarkRead } from '@/components/ClaimForms';
+import { InboxTable } from '@/components/InboxViews';
+import { demoInboxClaims } from '@/lib/demo-inbox';
+import { filterInbox, inboxCounts, inboxQueues, type InboxQueue } from '@/lib/inbox';
 import { londonDateTime, londonShortDate } from '@/lib/dates';
 
-type SP = { view?: string; q?: string; offset?: string };
+type SP = { view?: string; q?: string; offset?: string; queue?: string };
 const views = [['open', 'Open'], ['action', 'Needs action'], ['closed', 'Closed'], ['all', 'All']] as const;
 
 function nextStep(side: string, c: ClaimRow): string {
@@ -20,15 +23,13 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   const side = claimSide(ctx);
-  if (ctx.demo) {
-    return (<><PageHeader crumb="CLAIMS" title="Claims / FNOL" subtitle="Report, assess and follow claims." /><Notice>Claims are not available in the demonstration workspace. Sign in with a development account to use them.</Notice></>);
-  }
   if (!side) {
     return (<><PageHeader crumb="CLAIMS" title="Claims / FNOL" subtitle="Report, assess and follow claims." /><Notice>Your role does not include claims. Ask your administrator if you need access.</Notice></>);
   }
+  if (side === 'insurer') return <InsurerInbox ctx={ctx} searchParams={searchParams} />;
   const sp = await searchParams;
   const view = views.some(v => v[0] === sp.view) ? sp.view! : side === 'driver' ? 'all' : 'open';
-  const actionStatuses = side === 'insurer' ? needsInsurerAction : needsFleetAction;
+  const actionStatuses = needsFleetAction;
   const status = view === 'open' ? 'open' : view === 'closed' ? 'closed' : view === 'action' ? 'in:' + actionStatuses.join(',') : undefined;
   const offset = Math.max(0, Number(sp.offset) || 0);
   let error = '';
@@ -47,18 +48,18 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
   return (
     <>
       <PageHeader crumb="CLAIMS" title="Claims / FNOL"
-        subtitle={side === 'insurer' ? 'Claims sent to you by your fleets, and claims you log yourself.' : side === 'fleet' ? 'Claims reported by your drivers and your team. Review them, then send them to the insurer.' : 'Report an incident and follow your claims.'}
-        actions={canReportClaims(ctx) ? <LinkButton primary href="/claims/new">Report a claim</LinkButton> : canLogClaims(ctx) ? <LinkButton primary href="/claims/new">Log a claim</LinkButton> : undefined} />
+        subtitle={side === 'fleet' ? 'Claims reported by your drivers and your team. Review them, then send them to the insurer.' : 'Report an incident and follow your claims.'}
+        actions={canReportClaims(ctx) ? <LinkButton primary href="/claims/new">Report a claim</LinkButton> : undefined} />
       {error && <Notice alert>{error}</Notice>}
       <Stats items={[
         ['Open claims', counts.open, 'Not yet closed', '/claims?view=open'],
-        ...(side === 'driver' ? [] : [['Need action', counts.action, side === 'insurer' ? 'Waiting for you to start' : 'To review, send or answer', '/claims?view=action'] as [string, number, string, string]]),
+        ...(side === 'driver' ? [] : [['Need action', counts.action, 'To review, send or answer', '/claims?view=action'] as [string, number, string, string]]),
         ['Injury reported', counts.injury, 'Open claims', '/claims?view=open'],
         ['Closed', counts.closed, 'Completed', '/claims?view=closed']
       ]} />
       {notices.length > 0 && (
         <section className="panel" aria-label="Notifications">
-          <div className="panel-header"><div><h2>Notifications</h2><p className="subtext">{unread.length ? `${unread.length} new` : 'Nothing new'}. These are in-portal notices; email alerts are not set up yet.</p></div>{unread.length > 0 && <MarkRead />}</div>
+          <div className="panel-header"><div><h2>Notifications</h2><p className="subtext">{unread.length ? `${unread.length} new` : 'Nothing new'}.</p></div>{unread.length > 0 && <MarkRead />}</div>
           <ul className="notices">
             {notices.map(n => (
               <li key={n.id} className={n.read_at ? '' : 'unread'}>
@@ -76,14 +77,13 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
       </div>
       <section className="panel">
         <div className="table-scroll"><table>
-          <thead><tr><th>Reference</th>{side === 'insurer' && <th>Fleet</th>}<th>Incident</th><th>Vehicle</th><th>Driver</th><th>Injury</th><th>Status</th><th>Next step</th><th>Updated</th></tr></thead>
+          <thead><tr><th>Reference</th><th>Incident</th><th>Vehicle</th><th>Driver</th><th>Injury</th><th>Status</th><th>Next step</th><th>Updated</th></tr></thead>
           <tbody>
             {page.rows.map(c => {
               const step = nextStep(side, c);
               return (
                 <tr key={c.id}>
                   <td><Link prefetch={false} href={'/claims/' + c.id}><strong>{c.reference}</strong></Link></td>
-                  {side === 'insurer' && <td>{orgName(ctx, c.fleet_id)}</td>}
                   <td>{londonShortDate(c.incident_at)}</td>
                   <td><span className="registration">{c.registration}</span></td>
                   <td>{c.driver_name || '—'}</td>
@@ -98,6 +98,68 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
         </table></div>
         {!page.rows.length && <div className="empty">{sp.q ? 'No claims match that search.' : view === 'action' ? 'Nothing needs your action.' : 'No claims here yet.'}</div>}
         <Pagination total={page.total} offset={offset} base={base} />
+      </section>
+    </>
+  );
+}
+
+async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<ReturnType<typeof getContext>>>; searchParams: Promise<SP> }) {
+  const sp = await searchParams;
+  const queue = inboxQueues.some(q => q.id === sp.queue) ? sp.queue as InboxQueue : 'unassigned';
+  const now = new Date();
+  const me = ctx.user.id;
+  let error = '';
+  let rows = ctx.demo ? demoInboxClaims(now, me) : [] as ReturnType<typeof demoInboxClaims>;
+  let notices: Awaited<ReturnType<typeof getNotices>> = [];
+  if (!ctx.demo) {
+    try {
+      const [inbox, nt] = await Promise.all([listInboxClaims(), getNotices(8)]);
+      rows = inbox; notices = nt;
+    } catch (e) { error = e instanceof Error ? e.message : 'Unable to load claims.'; }
+  }
+  const q = (sp.q ?? '').trim().toLowerCase();
+  const searched = q ? rows.filter(c => c.reference.toLowerCase().includes(q) || c.registration.toLowerCase().replace(/\s/g, '').includes(q.replace(/\s/g, ''))) : rows;
+  const visible = filterInbox(searched, queue, me, now);
+  const counts = inboxCounts(rows, me, now);
+  const unread = notices.filter(n => !n.read_at);
+  return (
+    <>
+      <PageHeader crumb="CLAIMS" title="Claims inbox"
+        subtitle="Who owns each sent claim, and whether a clock has run out. This is not a claims-paying system."
+        actions={canLogClaims(ctx) ? <LinkButton primary href="/claims/new">Log a claim</LinkButton> : undefined} />
+      {ctx.demo && <Notice>Demonstration inbox · Fictional claims · Saving is disabled. Take and assign are shown so you can see the shape.</Notice>}
+      {error && <Notice alert>{error}</Notice>}
+      <Stats items={[
+        ['Mine', counts.mine, 'Assigned to you', '/claims?queue=mine'],
+        ['Unassigned', counts.unassigned, 'Nobody owns these', '/claims?queue=unassigned'],
+        ['Overdue', counts.overdue, 'A clock has run out', '/claims?queue=overdue'],
+        ['Need action', counts.action, 'Unassigned, new, or your overdue', '/claims?queue=unassigned']
+      ]} />
+      {notices.length > 0 && (
+        <section className="panel" aria-label="Notifications">
+          <div className="panel-header"><div><h2>Notifications</h2><p className="subtext">{unread.length ? `${unread.length} new` : 'Nothing new'}.</p></div>{unread.length > 0 && <MarkRead />}</div>
+          <ul className="notices">
+            {notices.map(n => (
+              <li key={n.id} className={n.read_at ? '' : 'unread'}>
+                {n.claim_id ? <Link prefetch={false} href={'/claims/' + n.claim_id}><strong>{n.title}</strong></Link> : <strong>{n.title}</strong>}
+                {n.body && <span> {n.body}</span>}
+                <span className="subtext"> {londonDateTime(n.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <div className="tabs-row" role="tablist" aria-label="Inbox queues">
+        {inboxQueues.map(item => (
+          <Link key={item.id} prefetch={false} className={'button-link' + (queue === item.id ? ' primary' : '')} href={'/claims?queue=' + item.id}>
+            {item.label} · {counts[item.id]}
+          </Link>
+        ))}
+        <form className="crm-search" action="/claims"><input type="hidden" name="queue" value={queue} /><input name="q" defaultValue={sp.q ?? ''} placeholder="Reference or registration" aria-label="Search claims" /><button>Search</button></form>
+      </div>
+      <section className="panel">
+        <InboxTable ctx={ctx} rows={visible} me={me} now={now} />
+        {!visible.length && <div className="empty">{q ? 'No claims match that search in this queue.' : 'Nothing in this queue.'}</div>}
       </section>
     </>
   );
