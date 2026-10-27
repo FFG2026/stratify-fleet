@@ -241,3 +241,10 @@ label.inline input[type=radio],label.inline input[type=checkbox]{width:auto;marg
 .password-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);margin:0;padding:6px 10px;border:0;border-radius:6px;background:transparent;color:var(--accent);font-size:13px;font-weight:700;cursor:pointer;min-height:32px}
 label .password-field input{margin-top:0}
 .filters.filters-inline{margin-bottom:0;flex:1 1 auto;min-width:0}
+
+.item-list{list-style:none;margin:8px 0;padding:0;display:grid;gap:8px}
+.item-row{border:1px solid var(--border,#e3e3dc);border-radius:8px;padding:10px 12px}
+.item-row.received{background:#f2f8f2}
+.item-actions{display:grid;gap:8px;margin-top:8px}
+.textbtn{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;justify-self:start}
+fieldset.demo-disabled{border:0;padding:0;margin:0;opacity:.7}

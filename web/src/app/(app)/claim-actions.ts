@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
 import { checkedId } from '@/lib/ids';
+import { itemsFromForm } from '@/lib/claim-items';
 import { normaliseRegistration, parseDate } from '@/lib/dates';
 import { insurerOutcomes, londonToIso, yesNo } from '@/lib/claims';
 import { maxFileBytes, sniffFile } from '@/lib/drivers';
@@ -116,6 +117,7 @@ export async function uploadClaimFile(form: FormData): Promise<ClaimResult> {
     const ctx = await requireContext();
     const id = checkedId(form.get('id'));
     const request = String(form.get('request') ?? '');
+    const item = String(form.get('item') ?? '');
     const file = form.get('file');
     if (!(file instanceof File) || !file.size) return { ok: false, message: 'Choose a file to upload.' };
     if (file.size > maxFileBytes) return { ok: false, message: `${file.name} is over 4 MB. Take a smaller photo or use a PDF under 4 MB.` };
@@ -127,10 +129,12 @@ export async function uploadClaimFile(form: FormData): Promise<ClaimResult> {
     const path = `${claim.fleet_id}/${claim.id}/${crypto.randomUUID()}.${kind.ext}`;
     await uploadFile(path, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, kind.type, 'claim-files');
     try {
-      await rpc('add_claim_attachment', {
+      const attachment = await rpc<string>('add_claim_attachment', {
         p_claim: claim.id, p_request: request ? checkedId(request) : null, p_kind: kind.type === 'application/pdf' ? 'document' : 'photo', p_path: path,
         p_name: file.name.slice(0, 200), p_type: kind.type, p_size: file.size, p_caption: str(form, 'caption', 200) || null
       });
+      // Uploading against a requested item also ticks that item off.
+      if (item) await rpc('fulfil_request_item', { p_item: checkedId(item), p_attachment: attachment, p_unavailable: null });
     } catch (error) { await deleteFile(path, 'claim-files'); throw error; }
     void ctx;
     refresh(id);
@@ -190,6 +194,28 @@ export async function answerRequest(form: FormData): Promise<ClaimResult> {
 export async function startReview(form: FormData): Promise<ClaimResult> {
   try { await requireContext(); const id = checkedId(form.get('id')); await rpc('start_claim_review', { p_claim: id, p_insurer_ref: str(form, 'ref', 60) || null }); refresh(id); return done('Saved.', id); }
   catch (error) { return fail(error); }
+}
+export async function requestItems(form: FormData): Promise<ClaimResult> {
+  try {
+    await requireContext();
+    const id = checkedId(form.get('id'));
+    const due = String(form.get('due') ?? '').trim();
+    if (due) parseDate(due);
+    const items = itemsFromForm({ items: form.getAll('item').map(String), otherLabel: String(form.get('otherLabel') ?? '') });
+    await rpc('request_claim_items', { p_claim: id, p_items: items, p_message: str(form, 'message', 1000) || null, p_due: due || null });
+    refresh(id);
+    return done('Request sent. The fleet is notified and sees a checklist on the claim.', id);
+  } catch (error) { return fail(error); }
+}
+// Fleet side: say that a requested item cannot be supplied.
+export async function itemUnavailable(form: FormData): Promise<ClaimResult> {
+  try {
+    await requireContext();
+    const id = checkedId(form.get('id'));
+    await rpc('fulfil_request_item', { p_item: checkedId(form.get('item')), p_attachment: null, p_unavailable: str(form, 'reason', 300) });
+    refresh(id);
+    return done('Noted. The insurer can see why.', id);
+  } catch (error) { return fail(error); }
 }
 export async function askForInformation(form: FormData): Promise<ClaimResult> {
   try {

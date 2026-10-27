@@ -5,9 +5,10 @@ import { useAction } from '@/components/useAction';
 import { shrink } from '@/lib/shrink';
 import {
   reportClaim, updateClaim, addParty, removeParty, uploadClaimFile, removeClaimFile, reviewClaim, sendClaim, withdrawClaim, addNote, answerRequest,
-  startReview, askForInformation, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue, assignClaimHandler
+  startReview, askForInformation, requestItems, itemUnavailable, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue, assignClaimHandler
 } from '@/app/(app)/claim-actions';
 import { insurerOutcomes, outcomeLabel } from '@/lib/claims';
+import { itemKinds, itemKindLabel, itemTitle, itemState, type RequestItem } from '@/lib/claim-items';
 import { cueNotConnected, cueStatusLabel, type CueSubmission } from '@/lib/cue';
 
 const note = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={'form-note' + (r && !r.ok ? ' form-error' : '')}>{r?.message}</div>;
@@ -28,12 +29,12 @@ function YesNo({ name, label, value, onChange, required = true }: { name: string
 }
 
 // Sends the chosen files one at a time (each request stays under the size limit) and reports how it went.
-async function sendFiles(claim: string, files: File[], request: string | null, progress: (text: string) => void): Promise<string[]> {
+async function sendFiles(claim: string, files: File[], request: string | null, progress: (text: string) => void, item: string | null = null): Promise<string[]> {
   const problems: string[] = [];
   for (let i = 0; i < files.length; i++) {
     progress(`Uploading ${i + 1} of ${files.length}…`);
     const data = new FormData();
-    data.set('id', claim); if (request) data.set('request', request);
+    data.set('id', claim); if (request) data.set('request', request); if (item) data.set('item', item);
     data.set('file', await shrink(files[i]));
     const result = await uploadClaimFile(data);
     if (!result.ok) problems.push(result.message);
@@ -279,6 +280,84 @@ export function AssignForm({ claim, me, handlerId, handlers, disabled }: {
 }
 
 // ---- insurer
+// Insurer: ask for specific photos or documents. The fleet gets a checklist and each item ticks off when a file arrives.
+export function RequestItemsForm({ claim }: { claim: string }) {
+  const { pending, result, onSubmit } = useAction(requestItems);
+  const [other, setOther] = useState(false);
+  return (
+    <form className="form-grid" onSubmit={onSubmit}>
+      <input type="hidden" name="id" value={claim} />
+      <fieldset className="group"><legend>Ask the fleet for photos or documents</legend>
+        {itemKinds.map(k => (
+          <label className="check" key={k}>
+            <input type="checkbox" name="item" value={k} onChange={k === 'other' ? e => setOther(e.target.checked) : undefined} />
+            <span>{itemKindLabel[k]}</span>
+          </label>
+        ))}
+        {other && <label>What else do you need?<input name="otherLabel" required minLength={2} maxLength={120} autoComplete="off" placeholder="e.g. Dashcam footage" /></label>}
+      </fieldset>
+      <label>Message to the fleet (optional)<textarea name="message" rows={2} maxLength={1000} placeholder="Anything that helps them send the right thing, for example which side of the vehicle." /></label>
+      <label>Needed by (optional)<input name="due" type="date" /></label>
+      <div className="actions"><button disabled={pending}>Send request</button></div>
+      {note(result)}
+    </form>
+  );
+}
+
+// Fleet: one row per requested item, with an upload or a way to say it cannot be supplied.
+export function ItemChecklist({ claim, request, items }: { claim: string; request: string; items: RequestItem[] }) {
+  return (
+    <ul className="item-list">
+      {items.map(i => <ItemRow key={i.id} claim={claim} request={request} item={i} />)}
+    </ul>
+  );
+}
+function ItemRow({ claim, request, item }: { claim: string; request: string; item: RequestItem }) {
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<{ ok: boolean; message: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const na = useAction(itemUnavailable);
+  const st = itemState(item);
+  const go = async (list: FileList | null) => {
+    const files = [...(list ?? [])];
+    if (!files.length) return;
+    setBusy(true);
+    // Any extra files go first against the request; the last file also ticks the item, which can close the request.
+    const extras = files.slice(0, -1), last = files.slice(-1);
+    const problems = [...await sendFiles(claim, extras, request, text => setState({ ok: true, message: text })), ...await sendFiles(claim, last, request, text => setState({ ok: true, message: text }), item.id)];
+    setBusy(false);
+    if (input.current) input.current.value = '';
+    setState(problems.length ? { ok: false, message: problems.join(' ') } : { ok: true, message: 'Sent.' });
+    router.refresh();
+  };
+  return (
+    <li className={'item-row ' + st}>
+      <div><strong>{itemTitle(item)}</strong> <ItemBadge item={item} /></div>
+      {st === 'waiting' && (
+        <div className="item-actions">
+          <label>Upload<input ref={input} type="file" multiple accept={photoAccept} disabled={busy} onChange={e => go(e.target.files)} /></label>
+          {note(state)}
+          {!open ? <button type="button" className="textbtn" onClick={() => setOpen(true)}>We cannot supply this</button> : (
+            <form className="form-grid" onSubmit={na.onSubmit}>
+              <input type="hidden" name="id" value={claim} /><input type="hidden" name="item" value={item.id} />
+              <label>Why not?<input name="reason" required minLength={3} maxLength={300} autoComplete="off" /></label>
+              <div className="actions"><button disabled={na.pending}>Tell the insurer</button></div>
+              {note(na.result)}
+            </form>
+          )}
+        </div>
+      )}
+      {st === 'unavailable' && item.unavailable_reason && <p className="subtext">Not available: {item.unavailable_reason}</p>}
+    </li>
+  );
+}
+export function ItemBadge({ item }: { item: RequestItem }) {
+  const st = itemState(item);
+  return <span className={'badge' + (st === 'waiting' ? ' warning' : '')}>{st === 'received' ? 'Received' : st === 'unavailable' ? 'Not available' : 'Waiting'}</span>;
+}
+
 export function InsurerPanel({ claim, status, reference }: { claim: string; status: string; reference: string }) {
   const start = useAction(startReview, false);
   const ask = useAction(askForInformation);
@@ -309,6 +388,7 @@ export function InsurerPanel({ claim, status, reference }: { claim: string; stat
         <div className="actions"><button disabled={ask.pending}>Send question</button></div>
         {note(ask.result)}
       </form>
+      <details className="withdraw"><summary>Ask for specific photos or documents</summary><RequestItemsForm claim={claim} /></details>
       <details className="withdraw"><summary>Close this claim</summary>
         <form className="form-grid" onSubmit={close.onSubmit}>
           <input type="hidden" name="id" value={claim} />

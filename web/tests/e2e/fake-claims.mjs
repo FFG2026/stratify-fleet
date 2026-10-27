@@ -4,7 +4,7 @@
 import { randomUUID as uid } from 'node:crypto';
 
 export function createClaims(ids) {
-  const db = { claims: [], parties: [], events: [], requests: [], files: [], notices: [] };
+  const db = { claims: [], parties: [], events: [], requests: [], files: [], notices: [], items: [] };
   const sideOf = u => (u.role === 'driver' ? 'driver' : ['insurer_admin', 'platform_super_admin'].includes(u.role) ? 'insurer' : ['fleet_admin', 'fleet_manager'].includes(u.role) ? 'fleet' : null);
   const visible = (c, u) => { const s = sideOf(u); return s === 'fleet' ? c.fleet_id === u.org : s === 'insurer' ? !!c.submitted_at && (u.see === 'all' || u.see.includes(c.fleet_id)) : s === 'driver' ? c.reported_by === u.id || c.driver_user_id === u.id : false; };
   const err = message => { const e = new Error(message); e.http = 400; return e; };
@@ -106,6 +106,24 @@ export function createClaims(ids) {
         if (!c.first_touched_at) c.first_touched_at = now();
         notice('fleet:' + c.fleet_id, c, 'info_requested', 'The insurer needs more information on ' + c.reference, b.p_question); touch(c); return id;
       }
+      case 'request_claim_items': {
+        const c = find(b.p_claim); if (c.status === 'closed') throw err('this claim is closed; reopen it first');
+        const list = b.p_items; if (!Array.isArray(list) || !list.length || list.length > 6) throw err('choose between 1 and 6 items');
+        const id = uid(); const names = list.map(i => i.kind === 'other' ? i.label : i.kind.replace('_', ' '));
+        db.requests.push({ id, claim_id: c.id, question: 'Please send: ' + names.join(', '), due_on: b.p_due, requested_at: now(), answered_at: null, answer: null, cancelled_at: null });
+        for (const i of list) db.items.push({ id: uid(), request_id: id, claim_id: c.id, kind: i.kind, label: i.label || null, created_at: now(), fulfilled_at: null, attachment_id: null, unavailable_reason: null });
+        c.status = 'awaiting_information'; event(c, 'info_requested', 'insurer', 'shared', 'Please send: ' + names.join(', '), email);
+        if (!c.handler_id) { c.handler_id = u.id; c.handler_email = email; c.assigned_at = now(); }
+        if (!c.first_touched_at) c.first_touched_at = now();
+        notice('fleet:' + c.fleet_id, c, 'info_requested', 'The insurer needs more information on ' + c.reference, names.join(', ')); touch(c); return id;
+      }
+      case 'fulfil_request_item': {
+        const it = db.items.find(x => x.id === b.p_item); if (!it || it.fulfilled_at) throw err('that item is no longer open');
+        it.fulfilled_at = now(); it.attachment_id = b.p_attachment || null; it.unavailable_reason = b.p_unavailable || null;
+        const c = find(it.claim_id); event(c, 'info_provided', 'fleet', 'shared', b.p_unavailable ? 'Not available: ' + b.p_unavailable : 'File provided', email);
+        if (db.items.filter(x => x.request_id === it.request_id).every(x => x.fulfilled_at)) { const r = db.requests.find(x => x.id === it.request_id); r.answered_at = now(); settle(c); notice('insurer:' + c.insurer_id, c, 'info_provided', 'More information on ' + c.reference, null); }
+        touch(c); return null;
+      }
       case 'cancel_claim_request': { const r = db.requests.find(x => x.id === b.p_request); r.cancelled_at = now(); const c = find(r.claim_id); settle(c); event(c, 'info_cancelled', 'insurer', 'shared', 'The insurer withdrew a question: ' + r.question, email); return null; }
       case 'respond_claim_request': {
         const r = db.requests.find(x => x.id === b.p_request); if (!open(r)) throw err('that question is no longer open');
@@ -188,6 +206,7 @@ export function createClaims(ids) {
       if (q.get('cancelled_at') === 'is.null') rows = rows.filter(r => !r.cancelled_at);
       return rows;
     }
+    if (path === 'claim_request_items') return claimOf() ? db.items.filter(i => i.claim_id === eq('claim_id')) : [];
     if (path === 'claim_attachments') {
       if (eq('id')) { const f = db.files.find(x => x.id === eq('id') && !x.deleted); const c = f && db.claims.find(x => x.id === f.claim_id); return f && c && visible(c, u) ? [f] : []; }
       return claimOf() ? db.files.filter(f => f.claim_id === eq('claim_id') && !f.deleted) : [];

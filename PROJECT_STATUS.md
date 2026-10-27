@@ -332,3 +332,9 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - **Demo:** five fictional inbox rows and four fleet MI rows so the screens are visible without a live book. Saving, take and assign are disabled. The same demonstration rows are also shown on a real insurer (or platform) login, marked Demonstration, so you can walk an insurer through the inbox and book without using the demo account. Live sent claims still appear in the same queues.
 - **Database:** migration `20261027080000_claim_inbox.sql`. Isolation test `supabase/tests/inbox.sql`. **Not yet applied** to the live project.
 - **Not in this increment:** MFA on claims reads, report lock/finalise, MID/CUE connectors, paying a claim.
+
+## Claim document and photo requests (27 Oct 2026, branch feature/claim-item-requests)
+- Insurer can ask for specific items (photos, estimate, police report, witness statement, other) with an optional message and due date. The fleet gets a checklist; each item is ticked by uploading a file or answered with "we cannot supply this" and a reason. When every item is dealt with the request closes and the insurer is notified.
+- Migration `20261027120000_claim_item_requests.sql` (table `claim_request_items`, RPCs `request_claim_items`, `fulfil_request_item`). Must be applied before the code is deployed. DB test: `supabase/tests/item_requests.sql` (not yet run against the database; Supabase connector access was lost).
+- Demo claims show sample notes and a sample request (read-only).
+- Not done: a "waiting on the fleet" count on the inbox; due dates on items are request-wide only.
