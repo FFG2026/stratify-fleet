@@ -248,3 +248,7 @@ label .password-field input{margin-top:0}
 .item-actions{display:grid;gap:8px;margin-top:8px}
 .textbtn{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;justify-self:start}
 fieldset.demo-disabled{border:0;padding:0;margin:0;opacity:.7}
+
+.bulk-table td,.bulk-table th{padding:6px 10px;text-align:left}
+.bulk-table tr.bad td{background:#fdf1ef}
+.bulk-table tr.good td{background:#f2f8f2}

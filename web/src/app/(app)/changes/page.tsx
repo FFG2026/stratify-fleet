@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getContext, canChange, getCoverActivity, orgName, isDriverOnly, isInsurerOnly, homeFor } from '@/lib/data';
 import { PageHeader, LinkButton, Badge, Notice } from '@/components/ui';
-import { AddVehicleForm, RemoveVehicleForm } from '@/components/CoverForms';
+import { AddVehicleForm, BulkVehicleForm, RemoveVehicleForm } from '@/components/CoverForms';
 import { londonDateTime, today } from '@/lib/dates';
 import { demoEvents } from '@/lib/demo';
 
@@ -14,7 +14,7 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
   if (isDriverOnly(ctx)) redirect('/driver');
   if (isInsurerOnly(ctx)) redirect(homeFor(ctx));
   const sp = await searchParams;
-  const mode = sp.mode === 'remove' ? 'remove' : 'add';
+  const mode = sp.mode === 'remove' ? 'remove' : sp.mode === 'bulk' ? 'bulk' : 'add';
   const allowed = canChange(ctx);
   const t = today();
   let error = '';
@@ -29,12 +29,17 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
   return (
     <>
       <PageHeader title="Manage cover" subtitle="Precise effective dates. A permanent record of every change." actions={<LinkButton href="/fleet">← Vehicle register</LinkButton>} />
-      <div className="tabs" role="tablist" aria-label="Coverage change">{tab('add', '＋ Add vehicle')}{tab('remove', '− Remove vehicle')}</div>
+      <div className="tabs" role="tablist" aria-label="Coverage change">{tab('add', '＋ Add vehicle')}{tab('bulk', '⇪ Upload a list')}{tab('remove', '− Remove vehicle')}</div>
       <Notice>Development rules: coverage starts on the addition date and ends before the removal date. Same-day removal and backdated changes require an approval process and are currently blocked. No MID submissions are sent.</Notice>
       {error && <Notice alert>{error}</Notice>}
       <div className="cover-layout">
         <div>
-          {mode === 'add' ? (
+          {mode === 'bulk' ? (
+            <section className="panel" role="tabpanel">
+              <div className="panel-header"><h2>Upload a list of vehicles</h2><Badge>Effective date required</Badge></div>
+              <div className="panel-body"><BulkVehicleForm today={t} allowed={allowed} policies={ctx.policies.map(p => ({ id: p.id, label: `${p.reference} · ${orgName(ctx, p.customer_id)}` }))} /></div>
+            </section>
+          ) : mode === 'add' ? (
             <section className="panel" role="tabpanel">
               <div className="panel-header"><h2>Add vehicle to a policy</h2><Badge>Effective date required</Badge></div>
               <div className="panel-body"><AddVehicleForm today={t} allowed={allowed} policies={ctx.policies.map(p => ({ id: p.id, label: `${p.reference} · ${orgName(ctx, p.customer_id)}` }))} /></div>

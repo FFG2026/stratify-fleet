@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useAction } from './useAction';
-import { addVehicle, removeVehicle, lookupRegistration, findOpenCover, type OpenCover } from '@/app/(app)/actions';
+import { addVehicle, bulkVehicles, type BulkResult, removeVehicle, lookupRegistration, findOpenCover, type OpenCover } from '@/app/(app)/actions';
+
+import { bulkTemplate } from '@/lib/bulk-vehicles';
 
 type PolicyOption = { id: string; label: string };
 
@@ -48,6 +50,59 @@ export function AddVehicleForm({ policies, today, allowed }: { policies: PolicyO
       <div className="form-note">This records a coverage instruction in the development workspace. Insurance and MID workflows require insurer approval before production use.</div>
       <button className="primary" disabled={!allowed || pending}>{pending ? 'Recording…' : 'Record addition'}</button>
       <div role="status" aria-live="polite" className="form-note">{result?.message}</div>
+    </form>
+  );
+}
+
+// Bulk add: choose a CSV, check it, then add. Nothing is recorded until "Add" is pressed.
+export function BulkVehicleForm({ policies, today, allowed }: { policies: PolicyOption[]; today: string; allowed: boolean }) {
+  const form = useRef<HTMLFormElement>(null);
+  const [result, setResult] = useState<BulkResult | null>(null);
+  const [pending, start] = useTransition();
+  const [fileName, setFileName] = useState('');
+  const run = (mode: 'preview' | 'import') => {
+    const f = form.current; if (!f) return;
+    const data = new FormData(f); data.set('mode', mode);
+    if (!(data.get('file') instanceof File) || (data.get('file') as File).size === 0) { setResult({ ok: false, message: 'Choose a CSV file first.' }); return; }
+    start(async () => { setResult(await bulkVehicles(data)); });
+  };
+  const template = () => {
+    const url = URL.createObjectURL(new Blob([bulkTemplate], { type: 'text/csv' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'vehicles-template.csv'; a.click(); URL.revokeObjectURL(url);
+  };
+  const ready = result?.rows?.filter(r => !r.error && !r.added).length ?? 0;
+  return (
+    <form ref={form} onSubmit={e => { e.preventDefault(); run('preview'); }}>
+      <p className="subtext">Add a whole fleet in one go. Use a spreadsheet saved as CSV with three columns: registration, make, model. Up to 500 vehicles at a time. <button type="button" className="textbtn" onClick={template}>Download a template</button></p>
+      <label>Policy
+        <select name="policy_id" required defaultValue="">
+          <option value="">Select a policy</option>
+          {policies.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+      </label>
+      <div className="form-grid">
+        <label>Cover starts on<input name="starts_on" type="date" min={today} defaultValue={today} required /></label>
+        <label>CSV file<input name="file" type="file" accept=".csv,text/csv" required onChange={e => { setFileName(e.target.files?.[0]?.name ?? ''); setResult(null); }} /></label>
+      </div>
+      <div className="form-note"><strong>Every vehicle starts from the moment you press Add</strong> (or the start of the chosen day). Cover cannot be backdated and each vehicle is recorded individually in the audit trail.</div>
+      <div className="actions">
+        <button disabled={!allowed || pending || !fileName}>{pending ? 'Working…' : 'Check the file'}</button>
+        {result?.stage === 'preview' && ready > 0 && <button type="button" className="primary" disabled={!allowed || pending} onClick={() => run('import')}>Add {ready} vehicle{ready === 1 ? '' : 's'}</button>}
+      </div>
+      <div role="status" aria-live="polite" className={result?.ok === false ? 'form-error' : 'form-note'}>{result?.message}</div>
+      {result?.rows && (
+        <div className="table-wrap"><table className="bulk-table">
+          <thead><tr><th>Row</th><th>Registration</th><th>Make and model</th><th>Status</th></tr></thead>
+          <tbody>
+            {result.rows.map(r => (
+              <tr key={r.line} className={r.error ? 'bad' : r.added ? 'good' : ''}>
+                <td>{r.line}</td><td><span className="registration">{r.registration || '—'}</span></td><td>{[r.make, r.model].filter(Boolean).join(' ')}</td>
+                <td>{r.error ? r.error : r.added ? 'Added' : 'Ready'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table></div>
+      )}
     </form>
   );
 }
