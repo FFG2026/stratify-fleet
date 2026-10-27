@@ -112,11 +112,18 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
       {side === 'tpa' && tpa && (
         <section className="panel next-step"><div className="panel-body">
           <h2>Your recommendation</h2>
-          <p className="subtext">You recommend an outcome and the insurer decides. You cannot contact the fleet or the driver, add files, or close the claim.</p>
+          <p className="subtext">You deal with the fleet on the insurer&apos;s behalf and recommend an outcome. The insurer decides and closes the claim.</p>
           <TpaOutcome tpa={tpa} />
           {open ? <TpaRecommendForm claim={c.id} current={tpa.routing?.recommendation ?? null} currentNote={tpa.routing?.recommendation_note ?? null} /> : <Notice>This claim is closed.</Notice>}
           <TpaThread tpa={tpa} />
           {open && <TpaThreadForm claim={c.id} as="tpa" />}
+        </div></section>
+      )}
+      {side === 'tpa' && open && (
+        <section className="panel"><div className="panel-body">
+          <h2>Contact the fleet</h2>
+          <p className="subtext">The fleet sees what you send as coming from the insurer. Replies reach you here.</p>
+          <RequestItemsForm claim={c.id} />
         </div></section>
       )}
       {side === 'insurer' && (
@@ -223,6 +230,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
                 {r.answer && <p className="answer-text">{r.answer}</p>}
                 {r.reminder_count ? <p className="subtext">Reminded {r.reminder_count} time{r.reminder_count === 1 ? '' : 's'}{r.last_reminded_at ? ', last ' + londonDateTime(r.last_reminded_at) : ''}.</p> : null}
                 {side === 'insurer' && !r.answered_at && !r.cancelled_at && open && <div className="actions"><RemindButton claim={c.id} request={r.id} /><WithdrawQuestion claim={c.id} request={r.id} /></div>}
+                {side === 'tpa' && !r.answered_at && !r.cancelled_at && open && <div className="actions"><RemindButton claim={c.id} request={r.id} /></div>}
               </li>
             ))}
           </ul>
@@ -240,6 +248,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
           ))}
         </ol>
         {(side === 'fleet' || (side === 'insurer' && c.submitted_at)) && <NoteForm claim={c.id} replies={side === 'insurer' ? replies : undefined} label={side === 'insurer' ? 'Add a note for the fleet' : status === 'reported' ? 'Add a note' : 'Add a note for the insurer'} />}
+        {side === 'tpa' && open && <NoteForm claim={c.id} noInternal label="Message to the fleet, on behalf of the insurer" />}
       </div></section>
     </>
   );

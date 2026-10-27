@@ -359,3 +359,9 @@ Owner decisions: the insurer keeps the final decision and closes the claim; seve
 - Screens: `/tpas` (insurer administrator: add TPAs and people, switch off), insurer claim panel (route, take back, thread, recommendation), TPA sign-in lands on Claims with a claims-only menu.
 - Tests: vitest `tpa.test.ts`; DB test `supabase/tests/tpa_claims.sql` (not yet run; expect `ERROR: TPA TESTS PASSED (n checks)`). Browser e2e not extended for TPAs.
 - Open: minimum 28-day cover period not built (waiting on owner: blocked vs billed to day 28; fixed vs per insurer). Decks do not yet mention TPAs.
+
+### TPA update — TPAs contact the fleet on the insurer's behalf (27 Oct 2026, from Adam Phillips' feedback)
+- Reverses the first design: a TPA now messages the fleet, requests photos and documents and sends reminders. To the fleet this appears as coming from the insurer (the sender's email is shown as for insurer staff). The TPA is notified when the fleet replies.
+- Still insurer-only: adding/removing files, closing a claim, routing, the final decision, private insurer notes.
+- Migration `20261027190000_tpa_contact_fleet.sql` (run after `20261027170000_tpa_claims.sql`): `tpa_note_to_fleet`, `tpa_request_claim_items`, `tpa_remind_fleet`, reply notification trigger. TPA contact is audited under the insurer.
+- Decks: the "cannot contact the fleet or the driver" line moved to "can do".

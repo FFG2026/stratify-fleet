@@ -74,6 +74,20 @@ begin
   begin perform public.tpa_add_note(cid, 'hi'); raise exception 'T21 fleet wrote as a TPA'; exception when sqlstate '42501' then null; end;
   reset role; checks := checks + 5;
 
+  -- a TPA contacts the fleet on the insurer's behalf; the fleet sees it as the insurer
+  perform set_config('request.jwt.claims', json_build_object('sub', U, 'role', 'authenticated')::text, true); set local role authenticated;
+  begin perform public.tpa_note_to_fleet(cid, 'Not mine'); raise exception 'T24 other TPA contacted the fleet'; exception when sqlstate '42501' then null; end;
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', T, 'role', 'authenticated')::text, true); set local role authenticated;
+  perform public.tpa_note_to_fleet(cid, 'Please send the repair estimate.');
+  perform public.tpa_request_claim_items(cid, '[{"kind":"estimate"}]'::jsonb, 'Thanks', null);
+  reset role; checks := checks + 3;
+  perform set_config('request.jwt.claims', json_build_object('sub', F, 'role', 'authenticated')::text, true); set local role authenticated;
+  select count(*) into n from public.claim_events where claim_id = cid and kind = 'note' and side = 'insurer' and visibility = 'shared';
+  if n <> 1 then raise exception 'T25 fleet saw % TPA notes', n; end if;
+  select count(*) into n from public.claim_requests where claim_id = cid and answered_at is null; if n <> 1 then raise exception 'T26 fleet saw % requests', n; end if;
+  reset role; checks := checks + 2;
+
   -- switching the TPA off removes its access
   perform set_config('request.jwt.claims', json_build_object('sub', A, 'role', 'authenticated')::text, true); set local role authenticated;
   perform public.set_tpa_active(t1, false);

@@ -177,9 +177,11 @@ export async function withdrawClaim(form: FormData): Promise<ClaimResult> {
 // ---- fleet and insurer: notes and answers
 export async function addNote(form: FormData): Promise<ClaimResult> {
   try {
-    await requireContext();
+    const ctx = await requireContext();
     const id = checkedId(form.get('id'));
-    await rpc('add_claim_note', { p_claim: id, p_body: str(form, 'body'), p_internal: form.get('internal') === 'on' });
+    // A TPA writes to the fleet on the insurer's behalf; it never has a private-to-us note.
+    if (claimSide(ctx) === 'tpa') await rpc('tpa_note_to_fleet', { p_claim: id, p_body: str(form, 'body') });
+    else await rpc('add_claim_note', { p_claim: id, p_body: str(form, 'body'), p_internal: form.get('internal') === 'on' });
     refresh(id);
     return done('Note added.', id);
   } catch (error) { return fail(error); }
@@ -201,12 +203,12 @@ export async function startReview(form: FormData): Promise<ClaimResult> {
 }
 export async function requestItems(form: FormData): Promise<ClaimResult> {
   try {
-    await requireContext();
+    const ctx = await requireContext();
     const id = checkedId(form.get('id'));
     const due = String(form.get('due') ?? '').trim();
     if (due) parseDate(due);
     const items = itemsFromForm({ items: form.getAll('item').map(String), otherLabel: String(form.get('otherLabel') ?? '') });
-    await rpc('request_claim_items', { p_claim: id, p_items: items, p_message: str(form, 'message', 1000) || null, p_due: due || null });
+    await rpc(claimSide(ctx) === 'tpa' ? 'tpa_request_claim_items' : 'request_claim_items', { p_claim: id, p_items: items, p_message: str(form, 'message', 1000) || null, p_due: due || null });
     refresh(id);
     return done('Request sent. The fleet is notified and sees a checklist on the claim.', id);
   } catch (error) { return fail(error); }
@@ -285,7 +287,7 @@ export async function assignClaimHandler(form: FormData): Promise<ClaimResult> {
 
 // ---- insurer tools: reminders, saved replies, bulk actions, digest
 export async function remindFleet(form: FormData): Promise<ClaimResult> {
-  try { await requireContext(); const id = checkedId(form.get('id')); await rpc('remind_fleet', { p_claim: id, p_request: checkedId(form.get('request')) }); refresh(id); return done('Reminder sent. The fleet is notified.', id); }
+  try { const ctx = await requireContext(); const id = checkedId(form.get('id')); await rpc(claimSide(ctx) === 'tpa' ? 'tpa_remind_fleet' : 'remind_fleet', { p_claim: id, p_request: checkedId(form.get('request')) }); refresh(id); return done('Reminder sent. The fleet is notified.', id); }
   catch (error) { return fail(error); }
 }
 export async function saveReply(form: FormData): Promise<ClaimResult> {
