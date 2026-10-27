@@ -350,3 +350,12 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 
 ## Pop-up notifications (27 Oct 2026)
 - A small card pops up in the corner of any page for new unread notifications (checked on load and every 30 s while the tab is visible), with a link to the claim; max 3 at once, auto-hides after 12 s. Each notification pops up once per browser tab; the badge and the Notifications list on the claims page are unchanged. No SQL.
+
+## Third-party administrators (TPAs) on claims (27 Oct 2026, branch feature/tpa-claims)
+Owner decisions: the insurer keeps the final decision and closes the claim; several TPAs per insurer; a TPA works only with the insurer and has no access to the fleet or driver.
+- Migration `20261027170000_tpa_claims.sql` (must be pasted into Supabase before merge): tables `tpas`, `tpa_members`, `claim_tpa`, `claim_tpa_notes`; RPCs `create_tpa`, `set_tpa_active`, `add_tpa_member`, `set_tpa_member_active`, `list_tpa_members`, `assign_claim_tpa`, `insurer_tpa_note`, `tpa_add_note`, `tpa_recommend`.
+- Design: TPA people have no organisation membership, so no existing role or policy matches them. Additive read policies match only a claim currently routed to a TPA they are an active member of (claim, parties, requests, files, shared events). Files are served through the same signed-in path; each TPA view is audited under the insurer.
+- A TPA can read, message the insurer and recommend (settle / decline / more information / other). It cannot upload, message the fleet, see private events, print the summary or close a claim. The fleet never sees routing, notes or audit rows.
+- Screens: `/tpas` (insurer administrator: add TPAs and people, switch off), insurer claim panel (route, take back, thread, recommendation), TPA sign-in lands on Claims with a claims-only menu.
+- Tests: vitest `tpa.test.ts`; DB test `supabase/tests/tpa_claims.sql` (not yet run; expect `ERROR: TPA TESTS PASSED (n checks)`). Browser e2e not extended for TPAs.
+- Open: minimum 28-day cover period not built (waiting on owner: blocked vs billed to day 28; fixed vs per insurer). Decks do not yet mention TPAs.

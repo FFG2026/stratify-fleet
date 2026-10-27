@@ -31,11 +31,13 @@ export const getContext = cache(async (): Promise<Context | null> => {
   const email = user.email ?? '';
   const demo = email.toLowerCase() === demoAccountEmail() && !!user.email_confirmed_at;
   if (demo) return { user: { id: user.id, email }, demo: true, orgs: demoOrgs, policies: demoPolicies, memberships: [] };
-  const [orgs, policies, memberships] = await Promise.all([
+  const [orgs, policies, memberships, tpaRows] = await Promise.all([
     allRows<OrgRow>('organisations'), allRows<PolicyRow>('policies'),
-    rest<Membership[]>(`/rest/v1/memberships?select=organisation_id,role,active&user_id=eq.${user.id}`)
+    rest<Membership[]>(`/rest/v1/memberships?select=organisation_id,role,active&user_id=eq.${user.id}`),
+    rest<{ tpas: { id: string; name: string; insurer_id: string; active: boolean } | null }[]>(`/rest/v1/tpa_members?select=tpas(id,name,insurer_id,active)&user_id=eq.${user.id}&active=eq.true`).catch(() => [])
   ]);
-  return { user: { id: user.id, email, mustChangePassword: user.app_metadata?.must_change_password === true }, demo: false, orgs: orgs.map(normaliseOrg), policies: policies.map(normalisePolicy), memberships };
+  const tpas = tpaRows.map(r => r.tpas).filter((t): t is NonNullable<typeof t> => !!t && t.active).map(t => ({ id: t.id, name: t.name, insurer_id: t.insurer_id }));
+  return { user: { id: user.id, email, mustChangePassword: user.app_metadata?.must_change_password === true }, demo: false, orgs: orgs.map(normaliseOrg), policies: policies.map(normalisePolicy), memberships, tpas };
 });
 
 export const rolesOf = (ctx: Context) => ctx.memberships.filter(m => m.active).map(m => m.role);
@@ -60,7 +62,9 @@ export const orgName = (ctx: Context, id: string | null | undefined) => ctx.orgs
 export const isInsurerOnly = (ctx: Context) => !ctx.demo && rolesOf(ctx).length > 0 && rolesOf(ctx).every(r => r.startsWith('insurer_'));
 export const canSearchNational = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r));
 export const isDriverOnly = (ctx: Context) => !ctx.demo && rolesOf(ctx).length > 0 && rolesOf(ctx).every(r => r === 'driver');
-export const homeFor = (ctx: Context) => (isDriverOnly(ctx) ? '/driver' : isPlatform(ctx) ? '/overview' : isInsurerSide(ctx) ? '/insurer' : '/customer');
+export const canManageTpas = (ctx: Context) => !ctx.demo && rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin'].includes(r));
+export const isTpaOnly = (ctx: Context) => !ctx.demo && !rolesOf(ctx).length && !!ctx.tpas?.length;
+export const homeFor = (ctx: Context) => (isTpaOnly(ctx) ? '/claims' : isDriverOnly(ctx) ? '/driver' : isPlatform(ctx) ? '/overview' : isInsurerSide(ctx) ? '/insurer' : '/customer');
 
 // ---- fleet register and removal list
 export async function getFleetPage(params: Params): Promise<Page<Period>> {

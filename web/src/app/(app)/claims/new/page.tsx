@@ -9,7 +9,7 @@ export default async function NewClaim() {
   if (!ctx) redirect('/login');
   const side = claimSide(ctx);
   const head = (title: string, subtitle: string) => <PageHeader crumb="CLAIMS" title={title} subtitle={subtitle} actions={<LinkButton href="/claims">← Claims</LinkButton>} />;
-  if (!side) return (<>{head('Claims / FNOL', 'Report a claim.')}<Notice>{ctx.demo ? 'Claims are not available in the demonstration workspace.' : 'Your role cannot report claims.'}</Notice></>);
+  if (!side || side === 'tpa') return (<>{head('Claims / FNOL', 'Report a claim.')}<Notice>{ctx.demo ? 'Claims are not available in the demonstration workspace.' : 'Your role cannot report claims.'}</Notice></>);
   let choices = { vehicles: [] as string[], drivers: [] as { id: string; name: string }[] };
   let error = '';
   try { choices = await reportChoices(ctx); } catch (e) { error = e instanceof Error ? e.message : 'Unable to load your vehicles.'; }
