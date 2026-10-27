@@ -18,7 +18,7 @@ export default async function Tpas() {
   return (
     <>
       <PageHeader crumb="CLAIMS" title="Third-party administrators" subtitle="TPAs work claims you route to them. They recommend; you keep the final decision." />
-      <Notice>A TPA only sees the claims you route to it. It cannot contact the fleet or the driver, add files, or close a claim. The fleet never sees that a TPA is involved.</Notice>
+      <Notice>A TPA only sees the claims you route to it. It deals with the fleet on your behalf (messages, requests for photos and documents, reminders), and the fleet sees that as coming from you. A TPA cannot add or remove files or close a claim; you keep the final decision.</Notice>
       {insurers.map(ins => (
         <section key={ins.id} className="panel"><div className="panel-body">
           <div className="cardhead"><h2>{ins.name}</h2></div>

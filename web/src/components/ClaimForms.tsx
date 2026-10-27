@@ -230,14 +230,14 @@ export function ReviewPanel({ claim, gaps, assessed, notes, fileCount }: { claim
   );
 }
 
-export function NoteForm({ claim, label, replies }: { claim: string; label: string; replies?: SavedReply[] }) {
+export function NoteForm({ claim, label, replies, noInternal }: { claim: string; label: string; replies?: SavedReply[]; noInternal?: boolean }) {
   const { pending, result, onSubmit } = useAction(addNote);
   return (
     <form className="form-grid" onSubmit={onSubmit}>
       <input type="hidden" name="id" value={claim} />
       {replies && <ReplyPicker replies={replies} field="body" />}
       <label>{label}<textarea name="body" required rows={3} maxLength={4000} /></label>
-      <label className="check"><input type="checkbox" name="internal" /><span>Keep this note to my own organisation</span></label>
+      {!noInternal && <label className="check"><input type="checkbox" name="internal" /><span>Keep this note to my own organisation</span></label>}
       <div className="actions"><button disabled={pending}>Add note</button></div>
       {note(result)}
     </form>
