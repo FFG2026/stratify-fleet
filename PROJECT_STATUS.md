@@ -338,3 +338,6 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Migration `20261027120000_claim_item_requests.sql` (table `claim_request_items`, RPCs `request_claim_items`, `fulfil_request_item`). Must be applied before the code is deployed. DB test: `supabase/tests/item_requests.sql` (not yet run against the database; Supabase connector access was lost).
 - Demo claims show sample notes and a sample request (read-only).
 - Not done: a "waiting on the fleet" count on the inbox; due dates on items are request-wide only.
+
+## Bulk vehicle upload (27 Oct 2026)
+- Manage cover has an "Upload a list" tab: CSV (registration, make, model; up to 500 rows) onto one policy with a start date. Check the file first (per-row errors, duplicates, bad registrations), then add the ready rows. Each row goes through `add_vehicle_cover`, so permission, tenant, policy dates and format are still checked by the database; each vehicle is audited individually. Not atomic: rows that fail (e.g. already on cover) are listed with the reason and the rest are kept. No SQL needed.

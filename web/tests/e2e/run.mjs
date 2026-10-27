@@ -115,6 +115,16 @@ try {
     { const c = (await calls()).filter(x => x.rpc === 'add_vehicle_cover').pop(); const eff = Date.parse(c.body.p_effective_at);
       check('adding a vehicle "from today" starts cover from the moment it is recorded, not midnight', c.body.p_registration === 'ZZ12AAA' && Math.abs(Date.now() - eff) < 120000, c.body.p_effective_at); }
 
+    // bulk upload
+    await page.click('a[role=tab]:has-text("Upload a list")'); await urlHas(page, /mode=bulk/);
+    await page.selectOption('select[name=policy_id]', { label: 'POL-1 · Northbank Logistics' });
+    await page.setInputFiles('input[name=file]', { name: 'fleet.csv', mimeType: 'text/csv', buffer: Buffer.from('Registration,Make,Model\nBK26AAA,Ford,Transit\nbk26 aab,Ford,Transit\nNOT A REG!!,Ford,Transit\nBK26AAA,Ford,Transit\n') });
+    await page.click('button:has-text("Check the file")'); await page.waitForSelector('text=2 of 4 rows are ready');
+    { const t = await text(page); check('the bulk upload preview flags a bad and a duplicate row without writing anything', t.includes('not a valid UK registration') && t.includes('appears earlier in the file') && !(await calls()).some(c => c.rpc === 'add_vehicle_cover' && /^BK26/.test(c.body.p_registration))); }
+    await page.click('button:has-text("Add 2 vehicles")'); await page.waitForSelector('text=2 added, 2 not added');
+    { const added = (await calls()).filter(c => c.rpc === 'add_vehicle_cover' && /^BK26/.test(c.body.p_registration)).map(c => c.body.p_registration).sort();
+      check('the bulk upload adds only the valid rows, each through the cover function', JSON.stringify(added) === JSON.stringify(['BK26AAA', 'BK26AAB']), JSON.stringify(added)); }
+    await go(page, base + '/changes');
     // remove vehicle
     await page.click('a[role=tab]:has-text("Remove vehicle")'); await urlHas(page, /mode=remove/);
     check('removal record button is off until a vehicle is chosen', await page.locator('button:has-text("Record removal")').isDisabled());
