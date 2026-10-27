@@ -6,6 +6,12 @@ import {
   clocksOf, handlerLabel, inboxWhy, nextInboxStep, urgentClock, waitText, type InboxClaim
 } from '@/lib/inbox';
 import { statusLabel, type ClaimStatus } from '@/lib/claims';
+import { demoFleetLabel, isDemoInboxClaim } from '@/lib/demo-inbox';
+
+const fleetOf = (ctx: Context, id: string) => {
+  const live = orgName(ctx, id);
+  return live !== '—' ? live : demoFleetLabel(id) ?? '—';
+};
 
 export function InboxTable({ ctx, rows, me, now }: { ctx: Context; rows: InboxClaim[]; me: string; now: Date }) {
   return (
@@ -18,8 +24,8 @@ export function InboxTable({ ctx, rows, me, now }: { ctx: Context; rows: InboxCl
             <tr key={c.id}>
               <td><Link prefetch={false} href={'/claims/' + c.id}><strong>{c.reference}</strong></Link>
                 <span className="subtext">{c.registration}{c.driver_name ? ' · ' + c.driver_name : ''}</span></td>
-              <td>{orgName(ctx, c.fleet_id)}</td>
-              <td>{inboxWhy(c, me, now)}{c.anyone_injured ? <><br /><Badge warn>Injury</Badge></> : null}{c.cover_after ? <><br /><Badge warn>Cover after incident</Badge></> : null}</td>
+              <td>{fleetOf(ctx, c.fleet_id)}</td>
+              <td>{inboxWhy(c, me, now)}{isDemoInboxClaim(c.id) ? <><br /><Badge>Demonstration</Badge></> : null}{c.anyone_injured ? <><br /><Badge warn>Injury</Badge></> : null}{c.cover_after ? <><br /><Badge warn>Cover after incident</Badge></> : null}</td>
               <td>{handlerLabel(c, me)}</td>
               <td>{clock ? <><strong className={clock.state === 'overdue' ? 'clock-overdue' : ''}>{clock.label}</strong><span className="subtext">{clock.text}</span></> : '—'}</td>
               <td>{waitText(c, now)}</td>

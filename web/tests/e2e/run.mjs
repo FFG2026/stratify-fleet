@@ -184,6 +184,11 @@ try {
     let t = await text(page);
     check('insurer sees only their own customers', t.includes('Northbank Logistics') && t.includes('Riverside Couriers') && !t.includes('Hilltop Plumbing'), t.slice(-400));
     check('insurer dashboard shows book and loss MI', t.includes('Book and loss') && t.includes('Claims per vehicle-year') && t.includes('No locked months'), t.slice(0, 800));
+    check('insurer dashboard includes the demonstration book', t.includes('Atlas Logistics') && t.includes('£96,400') && t.includes('walk an insurer through the book'), t.slice(0, 800));
+    await go(page, base + '/claims'); t = await text(page);
+    check('insurer inbox shows demonstration claims before any live FNOL', t.includes('CLM-2026-000184') && t.includes('Atlas Logistics') && t.includes('Demonstration'), t.slice(0, 700));
+    await go(page, base + '/claims/00000000-0000-4000-8000-000000000184'); t = await text(page);
+    check('insurer can open a demonstration claim', t.includes('CLM-2026-000184') && t.includes('First touch') && /Fictional|fictional/.test(t), t.slice(0, 600));
     check('insurer menu hides the platform overview', !(await page.locator('nav a').allInnerTexts()).some(x => /Platform overview/.test(x)));
     check('insurer menu has no Fleet dashboard (it duplicated the insurer dashboard)', !(await page.locator('nav a').allInnerTexts()).some(x => /Fleet dashboard/.test(x)));
     await go(page, base + '/customer'); check('an insurer opening the fleet dashboard address lands on the insurer dashboard', new URL(page.url()).pathname === '/insurer', page.url());
@@ -326,6 +331,7 @@ try {
     await go(page, base + '/claims'); let t = await text(page);
     check('the insurer now sees the claim', t.includes('AB10XYZ'), t.slice(0, 400));
     check('the insurer inbox shows queues and the unassigned sent claim', t.includes('Claims inbox') && t.includes('Unassigned') && t.includes('Assign or take'), t.slice(0, 600));
+    check('the insurer inbox includes demonstration claims', t.includes('CLM-2026-000184') && t.includes('Demonstration') && t.includes('walk an insurer through the inbox'), t.slice(0, 700));
     await go(page, base + claimUrl); t = await text(page);
     check('the insurer sees the full report including photos', t.includes('Driver has a sore neck') && t.includes('damage.png'), t.slice(0, 500));
     check('the insurer does not see the fleet\'s internal review note', !t.includes('Photos and details look complete.'));

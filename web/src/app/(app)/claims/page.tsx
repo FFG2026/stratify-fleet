@@ -109,12 +109,14 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
   const now = new Date();
   const me = ctx.user.id;
   let error = '';
-  let rows = ctx.demo ? demoInboxClaims(now, me) : [] as ReturnType<typeof demoInboxClaims>;
+  const fixtures = demoInboxClaims(now, me);
+  let rows = fixtures;
   let notices: Awaited<ReturnType<typeof getNotices>> = [];
   if (!ctx.demo) {
     try {
       const [inbox, nt] = await Promise.all([listInboxClaims(), getNotices(8)]);
-      rows = inbox; notices = nt;
+      rows = [...fixtures, ...inbox];
+      notices = nt;
     } catch (e) { error = e instanceof Error ? e.message : 'Unable to load claims.'; }
   }
   const q = (sp.q ?? '').trim().toLowerCase();
@@ -127,7 +129,7 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
       <PageHeader crumb="CLAIMS" title="Claims inbox"
         subtitle="Who owns each sent claim, and whether a clock has run out. This is not a claims-paying system."
         actions={canLogClaims(ctx) ? <LinkButton primary href="/claims/new">Log a claim</LinkButton> : undefined} />
-      {ctx.demo && <Notice>Demonstration inbox · Fictional claims · Saving is disabled. Take and assign are shown so you can see the shape.</Notice>}
+      <Notice>Demonstration claims are included so you can walk an insurer through the inbox. They are fictional and cannot be saved. Live sent claims appear in the same queues.</Notice>
       {error && <Notice alert>{error}</Notice>}
       <Stats items={[
         ['Mine', counts.mine, 'Assigned to you', '/claims?queue=mine'],

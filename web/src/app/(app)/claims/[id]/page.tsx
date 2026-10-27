@@ -8,7 +8,7 @@ import { PageHeader, Badge, Notice, LinkButton } from '@/components/ui';
 import { AnswerForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
 import { ClockList } from '@/components/InboxViews';
 import { inboxFromClaim, listClaimHandlers } from '@/lib/claims-data';
-import { demoClaimNote, demoInboxClaims, demoPriyaEmail, demoPriyaId } from '@/lib/demo-inbox';
+import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPriyaId, isDemoInboxClaim } from '@/lib/demo-inbox';
 import { handlerLabel } from '@/lib/inbox';
 
 const yn = (v: boolean | null) => (v === null ? 'Not said' : v ? 'Yes' : 'No');
@@ -23,7 +23,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   if (!side) notFound();
   let id: string;
   try { id = checkedId((await params).id); } catch { notFound(); }
-  if (ctx.demo) return <DemoClaim ctx={ctx} id={id} />;
+  if (ctx.demo || (side === 'insurer' && isDemoInboxClaim(id))) return <DemoClaim ctx={ctx} id={id} />;
   const data = await getClaim(id).catch(() => null);
   if (!data) notFound();
   const { claim: c, parties, events, requests, files } = data;
@@ -208,7 +208,7 @@ function DemoClaim({ ctx, id }: { ctx: NonNullable<Awaited<ReturnType<typeof get
   ];
   return (
     <>
-      <PageHeader crumb="CLAIMS" title={claim.reference} subtitle={`${claim.registration} · ${orgName(ctx, claim.fleet_id)}`} actions={<LinkButton href="/claims">← Inbox</LinkButton>} />
+      <PageHeader crumb="CLAIMS" title={claim.reference} subtitle={`${claim.registration} · ${orgName(ctx, claim.fleet_id) !== '—' ? orgName(ctx, claim.fleet_id) : demoFleetLabel(claim.fleet_id) ?? '—'}`} actions={<LinkButton href="/claims">← Inbox</LinkButton>} />
       <Notice>Demonstration claim · Fictional record · Saving is disabled.</Notice>
       {claim.cover_after && <Notice alert><strong>Cover was recorded after the incident.</strong> The insurer decides whether the claim is accepted.</Notice>}
       <div className="claim-status">

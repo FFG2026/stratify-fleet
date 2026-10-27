@@ -14,7 +14,7 @@ export function BookMiPanel({ rows, medianFirstTouchMs, demo = false }: { rows: 
         </div>
         <span className="muted">{rows.length} fleets</span>
       </div>
-      {demo && <Notice>Fictional earned premium and claim counts for the demonstration book. Saving is disabled.</Notice>}
+      {demo && <Notice>Fictional earned premium and claim counts so you can walk an insurer through the book. They are not the live register.</Notice>}
       <div className="stats book-mi-stats">
         {[
           ['Vehicles on cover today', fmt(t.onCover), 'Live register'],

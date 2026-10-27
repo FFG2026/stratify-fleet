@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eventTitle } from '../src/lib/claims';
 import { bookTotals, claimsPerVehicleYear, formatEarned, formatFrequency, medianMs } from '../src/lib/book-mi';
-import { demoBookRows, demoInboxClaims, demoPriyaId } from '../src/lib/demo-inbox';
+import { demoBookRows, demoFleetLabel, demoInboxClaims, demoPriyaId, isDemoInboxClaim } from '../src/lib/demo-inbox';
 import {
   clocksOf, defaultSla, filterInbox, formatDuration, inboxCounts, inboxWhy, inQueue,
   needsHandlerAction, nextInboxStep, urgentClock
@@ -92,5 +92,8 @@ describe('book MI', () => {
     expect(formatFrequency(0.31)).toBe('0.31');
     expect(medianMs([4, 1, 2])).toBe(2);
     expect(eventTitle.handler_assigned).toBe('Handler updated');
+    expect(isDemoInboxClaim('00000000-0000-4000-8000-000000000184')).toBe(true);
+    expect(isDemoInboxClaim('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')).toBe(false);
+    expect(demoFleetLabel('atlas')).toBe('Atlas Logistics');
   });
 });

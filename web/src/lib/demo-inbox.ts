@@ -4,6 +4,19 @@ import type { InboxClaim } from './inbox';
 export const demoPriyaId = '11111111-1111-4111-8111-111111111111';
 export const demoPriyaEmail = 'priya.khan@aldermutual.test';
 
+const demoFleetNames: Record<string, string> = {
+  atlas: 'Atlas Logistics', swift: 'Swiftline Couriers', meridian: 'Meridian Transport', oak: 'Oak & Co Services'
+};
+export const demoFleetLabel = (id: string) => demoFleetNames[id];
+export const demoInboxIds = [
+  '00000000-0000-4000-8000-000000000184',
+  '00000000-0000-4000-8000-000000000171',
+  '00000000-0000-4000-8000-000000000166',
+  '00000000-0000-4000-8000-000000000159',
+  '00000000-0000-4000-8000-000000000152'
+] as const;
+export const isDemoInboxClaim = (id: string) => (demoInboxIds as readonly string[]).includes(id);
+
 const ago = (now: Date, ms: number) => new Date(now.getTime() - ms).toISOString();
 const day = 86400000;
 const hour = 3600000;
