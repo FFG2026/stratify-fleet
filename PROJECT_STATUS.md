@@ -347,3 +347,6 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Reminders: manual "Send a reminder" (once per 24h per request) and an automatic one when a request passes its due date (then every 3 days, max 3).
 - Daily job `/api/cron/claims` (Vercel Cron 07:30 UTC, `web/vercel.json`) needs `CRON_SECRET` in Vercel; it sends overdue reminder emails and an insurer digest (counts only). Each person can turn the digest off in the inbox.
 - Saved replies (per insurer, max 30) plus three plain starter suggestions. Possible-duplicate panel: same fleet, same registration, incident within 7 days either side (advisory only; the 7 days is my choice, not an insurer rule). Bulk assign / bulk request items in the inbox (up to 50, one call per claim). Printable claim summary at `/claims/<id>/summary`.
+
+## Pop-up notifications (27 Oct 2026)
+- A small card pops up in the corner of any page for new unread notifications (checked on load and every 30 s while the tab is visible), with a link to the claim; max 3 at once, auto-hides after 12 s. Each notification pops up once per browser tab; the badge and the Notifications list on the claims page are unchanged. No SQL.

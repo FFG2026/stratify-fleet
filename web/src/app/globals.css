@@ -255,3 +255,8 @@ fieldset.demo-disabled{border:0;padding:0;margin:0;opacity:.7}
 
 .bulk-bar{margin:12px 0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.toast-stack{position:fixed;right:20px;bottom:20px;z-index:50;display:grid;gap:10px;width:min(360px,calc(100vw - 32px))}
+.toast-card{display:flex;gap:10px;justify-content:space-between;align-items:flex-start;background:#fff;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:12px 14px;box-shadow:0 6px 24px #19383026}
+.toast-card p{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.toast-card a{color:var(--ink);text-decoration:none}
+@media print{.toast-stack{display:none!important}}

@@ -11,7 +11,7 @@ import { normaliseRegistration, parseDate } from '@/lib/dates';
 import { insurerOutcomes, londonToIso, yesNo } from '@/lib/claims';
 import { maxFileBytes, sniffFile } from '@/lib/drivers';
 import { deleteFile, uploadFile } from '@/lib/storage';
-import { claimFleetOf, claimSide, getClaimBasic, getClaimFile, myVehicleIdByRegistration, vehicleIdByRegistration } from '@/lib/claims-data';
+import { getNotices, claimFleetOf, claimSide, getClaimBasic, getClaimFile, myVehicleIdByRegistration, vehicleIdByRegistration } from '@/lib/claims-data';
 import type { ActionResult } from '@/components/useAction';
 
 export type ClaimResult = ActionResult & { id?: string };
@@ -339,4 +339,10 @@ export async function bulkRequestItems(form: FormData): Promise<ClaimResult> {
     const message = str(form, 'message', 1000);
     return await eachClaim(ids, 'Requested from', id => rpc('request_claim_items', { p_claim: id, p_items: items, p_message: message || null, p_due: due || null }));
   } catch (error) { return fail(error); }
+}
+
+// Unread notifications for the pop-up in the corner. Read-only; the list and "Mark all as read" are unchanged.
+export async function recentUnread(): Promise<{ id: string; claim_id: string | null; title: string; body: string | null }[]> {
+  try { await requireContext(); return (await getNotices(8)).filter(n => !n.read_at).slice(0, 5).map(n => ({ id: n.id, claim_id: n.claim_id, title: n.title, body: n.body })); }
+  catch { return []; }
 }
