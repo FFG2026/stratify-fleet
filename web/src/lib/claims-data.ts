@@ -24,7 +24,14 @@ export type ClaimRow = {
   submitted_at: string | null; insurer_reference: string | null; closed_at: string | null; outcome: string | null; outcome_note: string | null;
   created_at: string; updated_at: string;
   handler_id?: string | null; handler_email?: string | null; assigned_at?: string | null; first_touched_at?: string | null;
+  // Embedded from claim_handling, which only the insurer side can read (it is null for everyone else). Flattened by withHandling().
+  claim_handling?: { handler_id: string | null; handler_email: string | null; assigned_at: string | null; first_touched_at: string | null } | null;
 };
+const HANDLING = 'claim_handling(handler_id,handler_email,assigned_at,first_touched_at)';
+function withHandling(row: ClaimRow): ClaimRow {
+  const { claim_handling: h, ...rest } = row;
+  return { ...rest, handler_id: h?.handler_id ?? null, handler_email: h?.handler_email ?? null, assigned_at: h?.assigned_at ?? null, first_touched_at: h?.first_touched_at ?? null };
+}
 export type ClaimParty = { id: string; claim_id: string; kind: 'third_party' | 'witness'; name: string; phone: string | null; vehicle_registration: string | null; insurer_name: string | null; injured: boolean | null; notes: string | null; added_by: string };
 export type ClaimEvent = { id: string; kind: string; side: 'driver' | 'fleet' | 'insurer'; visibility: string; actor_label: string | null; actor_email: string | null; body: string | null; created_at: string };
 export type ClaimRequest = { id: string; claim_id?: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null };
@@ -51,13 +58,13 @@ export async function countClaims(filter: string) {
 export async function getClaim(id: string) {
   const c = checkedId(id);
   const [claims, parties, events, requests, files] = await Promise.all([
-    rest<ClaimRow[]>('/rest/v1/claims?select=*&id=eq.' + c),
+    rest<ClaimRow[]>('/rest/v1/claims?select=*,' + HANDLING + '&id=eq.' + c),
     rest<ClaimParty[]>(`/rest/v1/claim_parties?select=*&claim_id=eq.${c}&order=created_at.asc&limit=50`),
     rest<ClaimEvent[]>(`/rest/v1/claim_events?select=id,kind,side,visibility,actor_label,actor_email,body,created_at&claim_id=eq.${c}&order=created_at.asc&limit=500`),
     rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,question,due_on,requested_at,answered_at,answer,cancelled_at&claim_id=eq.${c}&order=requested_at.asc&limit=100`),
     rest<ClaimFile[]>(`/rest/v1/claim_attachments?select=id,request_id,kind,file_name,content_type,size_bytes,caption,uploaded_by,uploaded_side,uploaded_at&claim_id=eq.${c}&order=uploaded_at.asc&limit=100`)
   ]);
-  return claims[0] ? { claim: claims[0], parties, events, requests, files } : null;
+  return claims[0] ? { claim: withHandling(claims[0]), parties, events, requests, files } : null;
 }
 // When the portal recorded the cover that applied at the time of the incident. A vehicle added after the incident is flagged
 // to the people reading the claim. This is information from the portal's own records, not a decision about cover.
@@ -141,7 +148,7 @@ function toInbox(row: ClaimRow, request: ClaimRequest | null, coverAfter: boolea
 }
 
 export async function listInboxClaims() {
-  const rows = await rest<ClaimRow[]>('/rest/v1/claims?select=*&status=neq.closed&submitted_at=not.is.null&order=updated_at.desc&limit=500');
+  const rows = (await rest<ClaimRow[]>('/rest/v1/claims?select=*,' + HANDLING + '&status=neq.closed&submitted_at=not.is.null&order=updated_at.desc&limit=500')).map(withHandling);
   if (!rows.length) return [];
   const ids = rows.map(r => checkedId(r.id)).join(',');
   const requests = await rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,claim_id,question,due_on,requested_at,answered_at,cancelled_at&answered_at=is.null&cancelled_at=is.null&claim_id=in.(${ids})&limit=500`).catch(() => []);

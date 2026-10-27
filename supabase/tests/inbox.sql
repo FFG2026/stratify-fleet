@@ -46,19 +46,19 @@ begin
   if exists (select 1 from public.list_claim_handlers(cid) where user_id = F) then raise exception 'T6 fleet on handler list'; end if;
   begin perform public.assign_claim_handler(cid, F); raise exception 'T7 assigned to the fleet'; exception when sqlstate '22023' then null; end;
   perform public.assign_claim_handler(cid, H);
-  select handler_id, handler_email, first_touched_at into hid, hemail, touched from public.claims where id = cid;
+  select handler_id, handler_email, first_touched_at into hid, hemail, touched from public.claim_handling where claim_id = cid;
   if hid <> H or hemail <> 'handler@x.test' then raise exception 'T8 assign did not stick'; end if;
   if touched is not null then raise exception 'T9 assigning to a colleague stamped first touch'; end if;
   perform public.start_claim_review(cid, 'EM-INBOX');
-  select handler_id, first_touched_at into hid, touched from public.claims where id = cid;
+  select handler_id, first_touched_at into hid, touched from public.claim_handling where claim_id = cid;
   if hid <> H then raise exception 'T10 start review stole an assigned claim'; end if;
   if touched is null then raise exception 'T11 start review did not stamp first touch'; end if;
   perform public.assign_claim_handler(cid, null);
-  select handler_id, first_touched_at into hid, touched from public.claims where id = cid;
+  select handler_id, first_touched_at into hid, touched from public.claim_handling where claim_id = cid;
   if hid is not null then raise exception 'T12 unassign left a handler'; end if;
   if touched is null then raise exception 'T13 unassign cleared first touch'; end if;
   perform public.start_claim_review(cid, null);
-  select handler_id into hid from public.claims where id = cid;
+  select handler_id into hid from public.claim_handling where claim_id = cid;
   if hid <> I then raise exception 'T14 start review did not take an unassigned claim'; end if;
   select count(*) into n from public.claim_events where claim_id = cid and kind = 'handler_assigned' and visibility = 'insurer';
   if n < 2 then raise exception 'T15 assignment events missing (%)', n; end if;
@@ -67,15 +67,22 @@ begin
   perform set_config('request.jwt.claims', json_build_object('sub', F, 'role', 'authenticated')::text, true); set local role authenticated;
   select count(*) into n from public.claim_events where claim_id = cid and kind = 'handler_assigned';
   if n <> 0 then raise exception 'T16 fleet sees assignment events'; end if;
+  select count(*) into n from public.claim_handling where claim_id = cid;
+  if n <> 0 then raise exception 'T20 fleet can read the handler details (%)', n; end if;
+  begin insert into public.claim_handling (claim_id, handler_id, handler_email, assigned_at) values (cid, F, 'f@x.test', now()); raise exception 'T21 fleet wrote handler details'; exception when sqlstate '42501' then null; end;
+  reset role; checks := checks + 3;
+  perform set_config('request.jwt.claims', json_build_object('sub', D, 'role', 'authenticated')::text, true); set local role authenticated;
+  select count(*) into n from public.claim_handling;
+  if n <> 0 then raise exception 'T22 driver can read handler details (%)', n; end if;
   reset role; checks := checks + 1;
 
   perform set_config('request.jwt.claims', json_build_object('sub', I, 'role', 'authenticated')::text, true); set local role authenticated;
   cid2 := public.log_insurer_claim(f1, null, 'ZZ99ABC', D, null, now() - interval '2 days', 'M62 junction 26', 'Third party reported a collision with our insured van.', false, null, false, null, 'EM-INBOX-2');
-  select handler_id, first_touched_at is not null into hid, ok from public.claims where id = cid2;
+  select handler_id, first_touched_at is not null into hid, ok from public.claim_handling where claim_id = cid2;
   if hid <> I or not ok then raise exception 'T17 logged claim not taken by the logger'; end if;
   perform public.close_claim(cid2, 'no_claim_pursued', 'Opened in error for the inbox test.');
   begin perform public.assign_claim_handler(cid2, H); raise exception 'T18 assigned a closed claim'; exception when sqlstate '22023' then null; end;
-  begin update public.claims set handler_id = H, handler_email = 'x', assigned_at = now() where id = cid; raise exception 'T19 direct handler update'; exception when sqlstate '42501' then null; end;
+  begin update public.claim_handling set handler_id = H, handler_email = 'x', assigned_at = now() where claim_id = cid; raise exception 'T19 direct handler update'; exception when sqlstate '42501' then null; end;
   reset role; checks := checks + 3;
 
   raise exception 'INBOX TESTS PASSED (% checks)', checks;

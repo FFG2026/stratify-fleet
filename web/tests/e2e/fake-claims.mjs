@@ -147,6 +147,12 @@ export function createClaims(ids) {
 
   // Reads: returns an array of rows (before paging) or undefined for tables that are not claims tables.
   function get(path, q, u) {
+    const r = getRaw(path, q, u);
+    // Like the real database: handling details are only readable by the insurer side, and come back embedded as claim_handling.
+    if (path === 'claims' && Array.isArray(r)) return r.map(c => { const { handler_id, handler_email, assigned_at, first_touched_at, ...rest } = c; return { ...rest, claim_handling: sideOf(u) === 'insurer' ? { handler_id, handler_email, assigned_at, first_touched_at } : null }; });
+    return r;
+  }
+  function getRaw(path, q, u) {
     const eq = k => (q.get(k) || '').startsWith('eq.') ? q.get(k).slice(3) : '';
     if (path === 'claims') {
       let rows = db.claims.filter(c => visible(c, u));

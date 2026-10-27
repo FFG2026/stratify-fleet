@@ -1,13 +1,23 @@
 -- Insurer claims inbox: who owns a sent claim, and when it was first touched.
 -- Not a claims-paying system. No reserves, payments or loss ratio. The fleet never sees assignment events.
 
-alter table public.claims
-  add column handler_id uuid references auth.users (id),
-  add column handler_email text check (handler_email is null or char_length(handler_email) <= 200),
-  add column assigned_at timestamptz,
-  add column first_touched_at timestamptz,
-  add check ((handler_id is null) = (handler_email is null) and (handler_id is null) = (assigned_at is null));
-create index claims_handler_idx on public.claims (insurer_id, handler_id) where status <> 'closed' and handler_id is not null;
+-- Handling details live in their own table, readable by the insurer side only. They must NOT sit on public.claims:
+-- fleet staff and the reporting driver can read that table, and would then see the handler's email and response times.
+create table public.claim_handling (
+  claim_id uuid primary key references public.claims (id) on delete cascade,
+  handler_id uuid references auth.users (id),
+  handler_email text check (handler_email is null or char_length(handler_email) <= 200),
+  assigned_at timestamptz,
+  first_touched_at timestamptz,
+  check ((handler_id is null) = (handler_email is null) and (handler_id is null) = (assigned_at is null))
+);
+create index claim_handling_handler_idx on public.claim_handling (handler_id) where handler_id is not null;
+alter table public.claim_handling enable row level security;
+create policy claim_handling_read on public.claim_handling for select to authenticated
+  using ('insurer' = any (private.claim_sides(claim_id)));
+revoke all on public.claim_handling from anon;
+revoke insert, update, delete, truncate on public.claim_handling from authenticated;
+grant select on public.claim_handling to authenticated;
 
 -- Auto-take an unassigned sent claim and stamp first touch. Used when the insurer starts work.
 create function private.ensure_claim_touch(p_claim uuid, p_user uuid) returns void
@@ -15,13 +25,14 @@ language plpgsql security definer set search_path = '' as $$
 declare v_email text;
 begin
   select email into v_email from auth.users where id = p_user;
-  update public.claims
-    set handler_id = coalesce(handler_id, p_user),
-        handler_email = case when handler_id is null then v_email else handler_email end,
-        assigned_at = case when handler_id is null then now() else assigned_at end,
-        first_touched_at = coalesce(first_touched_at, now()),
-        updated_at = now()
-  where id = p_claim;
+  insert into public.claim_handling (claim_id, handler_id, handler_email, assigned_at, first_touched_at)
+    values (p_claim, p_user, v_email, now(), now())
+  on conflict (claim_id) do update set
+    handler_id = coalesce(public.claim_handling.handler_id, excluded.handler_id),
+    handler_email = case when public.claim_handling.handler_id is null then excluded.handler_email else public.claim_handling.handler_email end,
+    assigned_at = case when public.claim_handling.handler_id is null then now() else public.claim_handling.assigned_at end,
+    first_touched_at = coalesce(public.claim_handling.first_touched_at, now());
+  update public.claims set updated_at = now() where id = p_claim;
 end $$;
 
 create or replace function public.log_insurer_claim(
@@ -50,15 +61,14 @@ begin
   v_name := coalesce(v_name, nullif(btrim(coalesce(p_driver_name, '')), ''));
   select email into v_email from auth.users where id = v_user;
   insert into public.claims (reference, fleet_id, insurer_id, policy_id, vehicle_id, registration, driver_user_id, driver_name, origin, reported_by, status,
-      incident_at, location, description, anyone_injured, injury_details, police_attended, police_reference, on_cover_at_incident, submitted_at, submitted_by, insurer_reference,
-      handler_id, handler_email, assigned_at, first_touched_at)
+      incident_at, location, description, anyone_injured, injury_details, police_attended, police_reference, on_cover_at_incident, submitted_at, submitted_by, insurer_reference)
   values (private.next_claim_ref(), p_fleet, v_insurer, v_policy, p_vehicle, v_reg, v_driver, v_name, 'insurer', v_user, 'under_review',
       p_incident_at, btrim(p_location), btrim(p_description), p_injured, case when p_injured then btrim(p_injury_details) end, p_police,
       case when p_police then nullif(btrim(coalesce(p_police_ref, '')), '') end, case when p_vehicle is null then null else v_policy is not null end,
-      now(), v_user, nullif(btrim(coalesce(p_insurer_ref, '')), ''),
-      v_user, v_email, now(), now())
+      now(), v_user, nullif(btrim(coalesce(p_insurer_ref, '')), ''))
   returning * into c;
   v_id := c.id;
+  insert into public.claim_handling (claim_id, handler_id, handler_email, assigned_at, first_touched_at) values (v_id, v_user, v_email, now(), now());
   perform private.claim_event(c, 'logged_by_insurer', 'insurer', 'shared', 'Logged by the insurer.');
   perform private.notify(p_fleet, 'claim.submit', null, v_id, 'claim_logged', 'A claim has been logged by your insurer',
     c.reference || ' · ' || v_reg || ' · ' || to_char(p_incident_at at time zone 'Europe/London', 'DD/MM/YYYY') || '. Please check it and add anything you know.');
@@ -109,12 +119,15 @@ declare
   v_user uuid := private.require_user();
   v_email text;
   v_ok boolean;
+  v_old uuid;
 begin
+  select handler_id into v_old from public.claim_handling where claim_id = c.id;
   if c.status = 'closed' then raise exception 'this claim is closed; reopen it first' using errcode = '22023'; end if;
   if p_handler is null then
-    update public.claims set handler_id = null, handler_email = null, assigned_at = null, updated_at = now() where id = c.id;
+    update public.claim_handling set handler_id = null, handler_email = null, assigned_at = null where claim_id = c.id;
+    update public.claims set updated_at = now() where id = c.id;
     perform private.claim_event(c, 'handler_assigned', 'insurer', 'insurer', 'Returned to the unassigned pile.');
-    perform private.write_audit(c.fleet_id, 'claim.handler_cleared', 'claim', c.id, jsonb_build_object('handler_id', c.handler_id), null);
+    perform private.write_audit(c.fleet_id, 'claim.handler_cleared', 'claim', c.id, jsonb_build_object('handler_id', v_old), null);
     return;
   end if;
   select exists (
@@ -125,15 +138,16 @@ begin
   ) into v_ok;
   if not v_ok then raise exception 'that person cannot handle this claim' using errcode = '22023'; end if;
   select email into v_email from auth.users where id = p_handler;
-  update public.claims
-    set handler_id = p_handler, handler_email = v_email, assigned_at = now(),
-        first_touched_at = case when p_handler = v_user then coalesce(first_touched_at, now()) else first_touched_at end,
-        updated_at = now()
-  where id = c.id;
+  insert into public.claim_handling (claim_id, handler_id, handler_email, assigned_at, first_touched_at)
+    values (c.id, p_handler, v_email, now(), case when p_handler = v_user then now() end)
+  on conflict (claim_id) do update set
+    handler_id = excluded.handler_id, handler_email = excluded.handler_email, assigned_at = now(),
+    first_touched_at = case when p_handler = v_user then coalesce(public.claim_handling.first_touched_at, now()) else public.claim_handling.first_touched_at end;
+  update public.claims set updated_at = now() where id = c.id;
   perform private.claim_event(c, 'handler_assigned', 'insurer', 'insurer',
     case when p_handler = v_user then 'Taken by the handler.' else 'Assigned to ' || coalesce(v_email, 'a colleague') || '.' end);
   perform private.write_audit(c.fleet_id, 'claim.handler_assigned', 'claim', c.id,
-    jsonb_build_object('handler_id', c.handler_id), jsonb_build_object('handler_id', p_handler));
+    jsonb_build_object('handler_id', v_old), jsonb_build_object('handler_id', p_handler));
 end $$;
 
 create function public.list_claim_handlers(p_claim uuid)

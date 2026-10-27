@@ -7,7 +7,7 @@ import { checkedId } from '@/lib/ids';
 import { medianMs, type BookFleetRow } from '@/lib/book-mi';
 import { demoBookRows, demoMedianFirstTouchMs } from '@/lib/demo-inbox';
 
-type ClaimHit = { fleet_id: string; status: string; submitted_at: string | null; first_touched_at: string | null; on_cover_at_incident: boolean | null };
+type ClaimHit = { fleet_id: string; status: string; submitted_at: string | null; on_cover_at_incident: boolean | null; claim_handling: { first_touched_at: string | null } | null };
 type Locked = { fleet_id: string; premium_gross: string | null; month_start: string };
 type Check = { user_id: string; fleet_id: string; next_check_due: string | null; checked_at: string };
 
@@ -19,7 +19,7 @@ export async function getBookMi(ctx: Context, fleets: FleetOverviewRow[]): Promi
   const ids = fleets.map(f => checkedId(f.fleet_id));
   const scope = 'fleet_id=in.(' + ids.join(',') + ')';
   const [claims, locked, checks, covered] = await Promise.all([
-    rest<ClaimHit[]>('/rest/v1/claims?select=fleet_id,status,submitted_at,first_touched_at,on_cover_at_incident&submitted_at=not.is.null&or=(status.neq.closed,submitted_at.gte.' + yearAgo.toISOString() + ')&' + scope + '&limit=2000').catch(() => []),
+    rest<ClaimHit[]>('/rest/v1/claims?select=fleet_id,status,submitted_at,on_cover_at_incident,claim_handling(first_touched_at)&submitted_at=not.is.null&or=(status.neq.closed,submitted_at.gte.' + yearAgo.toISOString() + ')&' + scope + '&limit=2000').catch(() => []),
     rest<Locked[]>('/rest/v1/reconciliations?select=fleet_id,premium_gross,month_start&status=eq.locked&month_start=gte.' + yearStart + '&' + scope + '&limit=500').catch(() => []),
     rest<Check[]>('/rest/v1/licence_checks?select=user_id,fleet_id,next_check_due,checked_at&order=checked_at.desc&' + scope + '&limit=2000').catch(() => []),
     getCoveredVehicles(ctx).catch(() => [])
@@ -28,7 +28,7 @@ export async function getBookMi(ctx: Context, fleets: FleetOverviewRow[]): Promi
   for (const c of checks) if (!latestCheck.has(c.user_id)) latestCheck.set(c.user_id, c);
   const due = today();
   const yearAgoMs = yearAgo.getTime();
-  const waits = claims.filter(c => c.submitted_at && c.first_touched_at).map(c => Date.parse(c.first_touched_at!) - Date.parse(c.submitted_at!)).filter(ms => Number.isFinite(ms) && ms >= 0);
+  const waits = claims.filter(c => c.submitted_at && c.claim_handling?.first_touched_at).map(c => Date.parse(c.claim_handling!.first_touched_at!) - Date.parse(c.submitted_at!)).filter(ms => Number.isFinite(ms) && ms >= 0);
   return {
     rows: fleets.map(f => {
       const mine = claims.filter(c => c.fleet_id === f.fleet_id);
