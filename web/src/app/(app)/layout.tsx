@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui';
 import { claimSide, unreadCount } from '@/lib/claims-data';
 import { signOut } from './actions';
 import { canReadCrm } from '@/lib/crm';
+import { NotificationToasts } from '@/components/NotificationToasts';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,6 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
+      {claimsOn && !ctx.demo && <NotificationToasts />}
       <ApplyBranding accent={brand?.accent ?? null} />
       <Sidebar brandLogo={brand?.logo_path && getEnv() ? getEnv()!.url+'/storage/v1/object/public/insurer-logos/'+brand.logo_path.split('/').map(encodeURIComponent).join('/') : null} brandName={brand?.display_name ?? null} items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
       <div className="main">

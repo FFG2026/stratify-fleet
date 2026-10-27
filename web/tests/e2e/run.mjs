@@ -391,6 +391,8 @@ try {
   { const res = await fetch(base + '/api/cron/claims', { redirect: 'manual' });
     check('the daily job refuses callers without the secret and is not redirected to login', res.status === 503 || res.status === 401, String(res.status)); }
   { const { context, page } = await session('customer@example.test');
+    await page.waitForSelector('.toast-stack .toast-card', { timeout: 8000 }).catch(() => {});
+    check('a new notification pops up in the corner with a link to the claim', await page.locator('.toast-stack .toast-card a[href^="/claims/"]').count() >= 1, 'stack=' + await page.locator('.toast-stack').count() + ' unreadbadge=' + await page.locator('.badge, .nav .count').allInnerTexts().then(a => a.join('|')).catch(() => '') + ' html=' + (await page.content()).includes('toast'));
     await go(page, base + claimUrl); let t = await text(page);
     check('the fleet sees a checklist for the requested items', t.includes('Photos') && t.includes('Waiting') && await page.locator('button:has-text("We cannot supply this")').count() === 2, t.slice(0, 700));
     await page.locator('button:has-text("We cannot supply this")').last().click();
