@@ -238,3 +238,17 @@ export async function markNoticesRead(): Promise<ClaimResult> {
   try { await requireContext(); await rpc('mark_notifications_read', { p_ids: null }); revalidatePath('/claims'); return done('Done.'); }
   catch (error) { return fail(error); }
 }
+
+export async function assignClaimHandler(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext();
+    if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+    if (claimSide(ctx) !== 'insurer') return { ok: false, message: 'Only insurer claims staff can assign a handler.' };
+    const id = checkedId(form.get('id'));
+    const raw = String(form.get('handler') ?? '').trim();
+    const handler = raw ? checkedId(raw) : null;
+    await rpc('assign_claim_handler', { p_claim: id, p_handler: handler });
+    refresh(id);
+    return done(handler ? (handler === ctx.user.id ? 'You have taken this claim.' : 'Handler updated.') : 'Returned to the unassigned pile.', id);
+  } catch (error) { return fail(error); }
+}

@@ -1,5 +1,5 @@
 # Stratify project status
-Last updated: 23 October 2026
+Last updated: 27 October 2026
 
 ## Architecture
 - Repository: FFG2026/stratify-fleet; branch feat/portal-foundation.
@@ -323,3 +323,12 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 - Crash alerts link to "Report a claim" (no prefill yet).
 - **Applied to Supabase (26 Oct 2026)**: `telematics` and `telematics_driver_distinct` (two overlapping assignments for the same person count as one driver). `supabase/tests/telematics.sql` passed on the live project (27 checks, rolled back).
 - Before using driver scores for real: DPIA, tell drivers (ICO worker-monitoring guidance), choose a first provider.
+
+## Insurer claims inbox and book/loss MI (27 Oct 2026, branch cursor/insurer-inbox-book-mi-4250)
+- **What it is:** a handler inbox and book MI strip. Not a claims-paying system: no reserves, payments, recoveries or invented loss ratio.
+- **Inbox** (`/claims` for insurer and demo): queues Mine / Unassigned / Waiting on fleet / Overdue. Three clocks — first touch (4h, 2h if injury), fleet reply (due date or 5 days), decision (10 days from first touch). Fleet-reply overdue is date-only vs Europe/London today.
+- **Assignment:** `handler_id`, `handler_email`, `assigned_at`, `first_touched_at` on `claims`. RPCs `assign_claim_handler` and `list_claim_handlers`. Starting review, asking for information, or logging a claim auto-takes if unassigned and stamps first touch. Assignment events are insurer-only; the fleet UI never shows a handler.
+- **Book and loss** (insurer dashboard): vehicles on cover, earned YTD from **locked** reconciliations only ("No locked months" until a month is locked), claims per vehicle-year, open claims, cover-after, median wait to first touch, licence overdue, on cover with no driver. No incurred, no loss ratio.
+- **Demo:** five fictional inbox rows and four fleet MI rows so the screens are visible without a live book. Saving, take and assign are disabled. The same demonstration rows are also shown on a real insurer (or platform) login, marked Demonstration, so you can walk an insurer through the inbox and book without using the demo account. Live sent claims still appear in the same queues.
+- **Database:** migration `20261027080000_claim_inbox.sql`. Isolation test `supabase/tests/inbox.sql`. **Not yet applied** to the live project.
+- **Not in this increment:** MFA on claims reads, report lock/finalise, MID/CUE connectors, paying a claim.

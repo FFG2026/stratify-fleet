@@ -5,7 +5,7 @@ import { useAction } from '@/components/useAction';
 import { shrink } from '@/lib/shrink';
 import {
   reportClaim, updateClaim, addParty, removeParty, uploadClaimFile, removeClaimFile, reviewClaim, sendClaim, withdrawClaim, addNote, answerRequest,
-  startReview, askForInformation, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue
+  startReview, askForInformation, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue, assignClaimHandler
 } from '@/app/(app)/claim-actions';
 import { insurerOutcomes, outcomeLabel } from '@/lib/claims';
 import { cueNotConnected, cueStatusLabel, type CueSubmission } from '@/lib/cue';
@@ -249,6 +249,30 @@ export function AnswerForm({ claim, request }: { claim: string; request: string 
       <label>Your answer<textarea name="answer" required rows={3} maxLength={4000} /></label>
       <PhotoUploader claim={claim} request={request} label="Attach photos or documents with your answer (optional)" />
       <div className="actions"><button className="primary" disabled={pending}>Send answer to the insurer</button></div>
+      {note(result)}
+    </form>
+  );
+}
+
+export function AssignForm({ claim, me, handlerId, handlers, disabled }: {
+  claim: string; me: string; handlerId: string | null; handlers: { user_id: string; email: string }[]; disabled?: boolean;
+}) {
+  const { pending, onSubmit, run, result } = useAction(assignClaimHandler, false);
+  const current = handlerId === me ? 'You' : handlers.find(h => h.user_id === handlerId)?.email || (handlerId ? 'Assigned' : 'Unassigned');
+  const go = (handler: string) => { const data = new FormData(); data.set('id', claim); data.set('handler', handler); run(data); };
+  return (
+    <form className="form-grid" onSubmit={onSubmit}>
+      <input type="hidden" name="id" value={claim} />
+      <p className="form-note">Handler · {current}. The fleet never sees this name.</p>
+      <label>Pass to<select name="handler" defaultValue={handlerId ?? ''} disabled={disabled}>
+        <option value="">Unassigned pile</option>
+        {handlers.map(h => <option key={h.user_id} value={h.user_id}>{h.user_id === me ? `You · ${h.email}` : h.email}</option>)}
+      </select></label>
+      <div className="actions">
+        <button disabled={pending || disabled} type="submit">Save handler</button>
+        {handlerId !== me && <button type="button" disabled={pending || disabled} onClick={() => go(me)}>Take this claim</button>}
+        {handlerId && <button type="button" disabled={pending || disabled} onClick={() => go('')}>Return to unassigned</button>}
+      </div>
       {note(result)}
     </form>
   );

@@ -156,6 +156,9 @@ textarea:focus{outline:2px solid #7eac78;outline-offset:2px}
 .choice-option input{width:20px;height:20px;margin:0}
 .choice-option.on{border-color:var(--accent);background:#eaf0e1}
 .claim-status{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 18px;font-size:13px}
+.clock-overdue{color:#9e3b2f;font-weight:700}
+.book-mi-stats{grid-template-columns:repeat(4,minmax(0,1fr));padding:8px 23px 4px}
+@media(max-width:700px){.book-mi-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .next-step{border-color:#7eac78}
 .review{display:grid;gap:18px}
 .gaps{margin:0;padding-left:20px;color:#9a3b2c;display:grid;gap:4px}

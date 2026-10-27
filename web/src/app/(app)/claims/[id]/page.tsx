@@ -5,7 +5,11 @@ import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
 import { PageHeader, Badge, Notice, LinkButton } from '@/components/ui';
-import { AnswerForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
+import { AnswerForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
+import { ClockList } from '@/components/InboxViews';
+import { inboxFromClaim, listClaimHandlers } from '@/lib/claims-data';
+import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPriyaId, isDemoInboxClaim } from '@/lib/demo-inbox';
+import { handlerLabel } from '@/lib/inbox';
 
 const yn = (v: boolean | null) => (v === null ? 'Not said' : v ? 'Yes' : 'No');
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
@@ -16,9 +20,10 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   const side = claimSide(ctx);
-  if (ctx.demo || !side) notFound();
+  if (!side) notFound();
   let id: string;
   try { id = checkedId((await params).id); } catch { notFound(); }
+  if (ctx.demo || (side === 'insurer' && isDemoInboxClaim(id))) return <DemoClaim ctx={ctx} id={id} />;
   const data = await getClaim(id).catch(() => null);
   if (!data) notFound();
   const { claim: c, parties, events, requests, files } = data;
@@ -37,6 +42,8 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const cover = await getCoverRecord(c.vehicle_id, c.incident_at).catch(() => null);
   // CUE is the insurer's own claims-history contribution; the fleet and driver never see it. null means the CUE table is unavailable, so the panel is hidden.
   const cue = side === 'insurer' && c.submitted_at ? await getCueSubmissions(c.id).catch(() => null) : null;
+  const inbox = side === 'insurer' && c.submitted_at ? inboxFromClaim(c, requests, !!cover?.after) : null;
+  const handlers = inbox ? await listClaimHandlers(c.id) : [];
   return (
     <>
       <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<LinkButton href="/claims">← Claims</LinkButton>} />
@@ -71,6 +78,16 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
       )}
       {side === 'driver' && (
         <Notice>{status === 'reported' ? 'Your fleet is reviewing this report and will send it to the insurer. You can add photos until then.' : status === 'closed' ? 'This claim is closed.' : 'This claim has been sent to the insurer. Your fleet will deal with any questions.'}</Notice>
+      )}
+      {inbox && (
+        <>
+          <section className="panel next-step"><div className="panel-body">
+            <h2>Assignment</h2>
+            <p className="subtext">Handler · {handlerLabel(inbox, ctx.user.id)}. Take, pass, or return to the pile. The fleet never sees this.</p>
+            <AssignForm claim={c.id} me={ctx.user.id} handlerId={c.handler_id ?? null} handlers={handlers} />
+          </div></section>
+          <ClockList claim={inbox} now={new Date()} />
+        </>
       )}
       {side === 'insurer' && (
         <section className="panel next-step"><div className="panel-body">
@@ -176,6 +193,38 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
           ))}
         </ol>
         {(side === 'fleet' || (side === 'insurer' && c.submitted_at)) && <NoteForm claim={c.id} label={side === 'insurer' ? 'Add a note for the fleet' : status === 'reported' ? 'Add a note' : 'Add a note for the insurer'} />}
+      </div></section>
+    </>
+  );
+}
+
+function DemoClaim({ ctx, id }: { ctx: NonNullable<Awaited<ReturnType<typeof getContext>>>; id: string }) {
+  const now = new Date();
+  const claim = demoInboxClaims(now, ctx.user.id).find(c => c.id === id);
+  if (!claim) notFound();
+  const handlers = [
+    { user_id: ctx.user.id, email: ctx.user.email },
+    { user_id: demoPriyaId, email: demoPriyaEmail }
+  ];
+  return (
+    <>
+      <PageHeader crumb="CLAIMS" title={claim.reference} subtitle={`${claim.registration} · ${orgName(ctx, claim.fleet_id) !== '—' ? orgName(ctx, claim.fleet_id) : demoFleetLabel(claim.fleet_id) ?? '—'}`} actions={<LinkButton href="/claims">← Inbox</LinkButton>} />
+      <Notice>Demonstration claim · Fictional record · Saving is disabled.</Notice>
+      {claim.cover_after && <Notice alert><strong>Cover was recorded after the incident.</strong> The insurer decides whether the claim is accepted.</Notice>}
+      <div className="claim-status">
+        <Badge warn>{statusLabel[claim.status as ClaimStatus] ?? claim.status}</Badge>
+        {claim.anyone_injured && <Badge warn>Injury reported</Badge>}
+        <span>Handler · {handlerLabel(claim, ctx.user.id)}</span>
+      </div>
+      <section className="panel next-step"><div className="panel-body">
+        <h2>Assignment</h2>
+        <AssignForm claim={claim.id} me={ctx.user.id} handlerId={claim.handler_id} handlers={handlers} disabled />
+      </div></section>
+      <ClockList claim={claim} now={now} />
+      <section className="panel"><div className="panel-body">
+        <h2>What happened</h2>
+        <p>{demoClaimNote(claim.id)}</p>
+        <p className="subtext">This is a demonstration file so you can see the inbox, the clocks, and assignment. It is not a real FNOL.</p>
       </div></section>
     </>
   );
