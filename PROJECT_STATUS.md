@@ -341,3 +341,9 @@ Checked against the code and the dev database. Nothing was changed by the sweep 
 
 ## Bulk vehicle upload (27 Oct 2026)
 - Manage cover has an "Upload a list" tab: CSV (registration, make, model; up to 500 rows) onto one policy with a start date. Check the file first (per-row errors, duplicates, bad registrations), then add the ready rows. Each row goes through `add_vehicle_cover`, so permission, tenant, policy dates and format are still checked by the database; each vehicle is audited individually. Not atomic: rows that fail (e.g. already on cover) are listed with the reason and the rest are kept. No SQL needed.
+
+## Insurer tools (27 Oct 2026)
+- Migration `20261027140000_insurer_tools.sql`: `remind_fleet`, `run_overdue_reminders` (service role), `saved_replies` + `save_reply`/`delete_saved_reply`, `claim_possible_duplicates`, `digest_optout` + `set_digest`, `insurer_digest` (service role). DB test `supabase/tests/insurer_tools.sql` (not yet run against the database).
+- Reminders: manual "Send a reminder" (once per 24h per request) and an automatic one when a request passes its due date (then every 3 days, max 3).
+- Daily job `/api/cron/claims` (Vercel Cron 07:30 UTC, `web/vercel.json`) needs `CRON_SECRET` in Vercel; it sends overdue reminder emails and an insurer digest (counts only). Each person can turn the digest off in the inbox.
+- Saved replies (per insurer, max 30) plus three plain starter suggestions. Possible-duplicate panel: same fleet, same registration, incident within 7 days either side (advisory only; the 7 days is my choice, not an insurer rule). Bulk assign / bulk request items in the inbox (up to 50, one call per claim). Printable claim summary at `/claims/<id>/summary`.

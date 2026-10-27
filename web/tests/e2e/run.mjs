@@ -365,6 +365,31 @@ try {
     await page.click('button:has-text("Send request")'); await page.waitForTimeout(1500); let t = await text(page);
     check('the insurer can request specific photos and documents', (await calls()).some(c => c.rpc === 'request_claim_items' && c.body.p_items.length === 2) && /0 of 2 received/.test(t), t.slice(0, 600));
     await context.close(); }
+  { const { context, page } = await session('insurer@example.test');
+    await go(page, base + claimUrl);
+    await page.click('button:has-text("Send a reminder")'); await page.waitForTimeout(1500); let t = await text(page);
+    check('the insurer can remind the fleet about an open request', (await calls()).some(c => c.rpc === 'remind_fleet') && /Reminded 1 time/.test(t), t.slice(0, 500));
+    await page.click('button:has-text("Send a reminder")'); await page.waitForTimeout(1200); t = await text(page);
+    check('a second reminder inside 24 hours is refused with a clear message', /already reminded/i.test(t), t.slice(0, 400));
+    await page.click('summary:has-text("Manage my saved replies")');
+    await page.fill('input[name=title]', 'Chase estimate'); await page.fill('textarea[name=body]', 'Please send the repair estimate by Friday.'); await page.click('button:has-text("Save reply")'); await page.waitForTimeout(1500);
+    check('the insurer can save a reply', (await calls()).some(c => c.rpc === 'save_reply' && c.body.p_title === 'Chase estimate'));
+    t = await page.locator('select:has(option:has-text("Chase estimate"))').first().innerText();
+    check('saved replies and starters appear in the picker', t.includes('Chase estimate') && t.includes('Suggested: more photos'), t);
+    await page.locator('form:has(textarea[name=question]) select').selectOption({ label: 'Chase estimate' });
+    check('choosing a saved reply fills the box', (await page.inputValue('textarea[name=question]')).includes('repair estimate by Friday'));
+    await go(page, base + claimUrl + '/summary'); t = await text(page);
+    check('the insurer gets a printable claim summary', t.includes('summary') && t.includes('Overview') && t.includes('Timeline') && await page.locator('button:has-text("Print or save as PDF")').count() === 1, t.slice(0, 400));
+    await go(page, base + '/claims?queue=waiting'); t = await text(page);
+    check('the inbox lists the claim under Waiting on fleet and offers bulk actions', t.includes('AB10XYZ') && t.includes('Ticked claims') && t.includes('Daily email summary'), t.slice(0, 600));
+    await page.locator('input[name=claim][form=bulk]').first().check();
+    await page.selectOption('select[name=handler]', 'unassign'); await page.click('button:has-text("Assign")'); await page.waitForTimeout(1500);
+    check('bulk assign runs the single-claim function for each ticked claim', (await calls()).some(c => c.rpc === 'assign_claim_handler' && c.body.p_handler === null), '');
+    await page.click('button:has-text("Turn off")'); await page.waitForTimeout(1200);
+    check('the insurer can turn the daily email off', (await calls()).some(c => c.rpc === 'set_digest' && c.body.p_enabled === false));
+    await context.close(); }
+  { const res = await fetch(base + '/api/cron/claims', { redirect: 'manual' });
+    check('the daily job refuses callers without the secret and is not redirected to login', res.status === 503 || res.status === 401, String(res.status)); }
   { const { context, page } = await session('customer@example.test');
     await go(page, base + claimUrl); let t = await text(page);
     check('the fleet sees a checklist for the requested items', t.includes('Photos') && t.includes('Waiting') && await page.locator('button:has-text("We cannot supply this")').count() === 2, t.slice(0, 700));

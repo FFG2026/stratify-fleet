@@ -252,3 +252,6 @@ fieldset.demo-disabled{border:0;padding:0;margin:0;opacity:.7}
 .bulk-table td,.bulk-table th{padding:6px 10px;text-align:left}
 .bulk-table tr.bad td{background:#fdf1ef}
 .bulk-table tr.good td{background:#f2f8f2}
+
+.bulk-bar{margin:12px 0}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

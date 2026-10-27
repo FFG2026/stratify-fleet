@@ -5,9 +5,10 @@ import { useAction } from '@/components/useAction';
 import { shrink } from '@/lib/shrink';
 import {
   reportClaim, updateClaim, addParty, removeParty, uploadClaimFile, removeClaimFile, reviewClaim, sendClaim, withdrawClaim, addNote, answerRequest,
-  startReview, askForInformation, requestItems, itemUnavailable, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue, assignClaimHandler
+  startReview, askForInformation, remindFleet, saveReply, deleteReply, requestItems, itemUnavailable, withdrawQuestion, closeClaim, reopenClaim, markNoticesRead, queueCue, assignClaimHandler
 } from '@/app/(app)/claim-actions';
 import { insurerOutcomes, outcomeLabel } from '@/lib/claims';
+import type { SavedReply } from '@/lib/claims-data';
 import { itemKinds, itemKindLabel, itemTitle, itemState, type RequestItem } from '@/lib/claim-items';
 import { cueNotConnected, cueStatusLabel, type CueSubmission } from '@/lib/cue';
 
@@ -229,11 +230,12 @@ export function ReviewPanel({ claim, gaps, assessed, notes, fileCount }: { claim
   );
 }
 
-export function NoteForm({ claim, label }: { claim: string; label: string }) {
+export function NoteForm({ claim, label, replies }: { claim: string; label: string; replies?: SavedReply[] }) {
   const { pending, result, onSubmit } = useAction(addNote);
   return (
     <form className="form-grid" onSubmit={onSubmit}>
       <input type="hidden" name="id" value={claim} />
+      {replies && <ReplyPicker replies={replies} field="body" />}
       <label>{label}<textarea name="body" required rows={3} maxLength={4000} /></label>
       <label className="check"><input type="checkbox" name="internal" /><span>Keep this note to my own organisation</span></label>
       <div className="actions"><button disabled={pending}>Add note</button></div>
@@ -280,8 +282,58 @@ export function AssignForm({ claim, me, handlerId, handlers, disabled }: {
 }
 
 // ---- insurer
+// Wording an insurer reuses. The starters are plain suggestions; the insurer's own saved replies are kept per insurer.
+export const starterReplies: SavedReply[] = [
+  { id: 'starter-photos', title: 'Suggested: more photos', body: 'Please send a few more photos of the damage, including each side of the vehicle and any damage to the other vehicle.' },
+  { id: 'starter-estimate', title: 'Suggested: repair estimate', body: 'Please send the repair estimate when you have it.' },
+  { id: 'starter-repaired', title: 'Suggested: has it been repaired?', body: 'Please tell us whether the vehicle has been repaired and, if so, when and by whom.' }
+];
+export function ReplyPicker({ replies, field }: { replies: SavedReply[]; field: string }) {
+  const all = [...replies, ...starterReplies];
+  return (
+    <label>Use a saved reply (optional)
+      <select value="" onChange={e => {
+        const r = all.find(x => x.id === e.target.value); const f = e.currentTarget.closest('form');
+        const box = f?.elements.namedItem(field) as HTMLTextAreaElement | null;
+        if (r && box) { box.value = r.body; box.focus(); }
+      }}>
+        <option value="">Choose wording to fill the box below</option>
+        {all.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+      </select>
+    </label>
+  );
+}
+export function SavedRepliesManager({ claim, insurer, replies }: { claim: string; insurer: string; replies: SavedReply[] }) {
+  const add = useAction(saveReply);
+  const del = useAction(deleteReply, false);
+  return (
+    <div>
+      <form className="form-grid" onSubmit={add.onSubmit}>
+        <input type="hidden" name="id" value={claim} /><input type="hidden" name="insurer" value={insurer} />
+        <label>Title<input name="title" required minLength={2} maxLength={80} autoComplete="off" /></label>
+        <label>Wording<textarea name="body" required minLength={2} maxLength={1000} rows={3} /></label>
+        <div className="actions"><button disabled={add.pending}>Save reply</button></div>
+        {note(add.result)}
+      </form>
+      {replies.length > 0 && (
+        <ul className="doclist">
+          {replies.map(r => (
+            <li key={r.id}><strong>{r.title}</strong><span className="subtext"> · {r.body}</span>{' '}
+              <button type="button" className="textbtn" disabled={del.pending} onClick={() => { const f = new FormData(); f.set('id', claim); f.set('reply', r.id); del.run(f); }}>Delete</button></li>
+          ))}
+        </ul>
+      )}
+      {note(del.result)}
+    </div>
+  );
+}
+export function RemindButton({ claim, request }: { claim: string; request: string }) {
+  const { pending, run, result } = useAction(remindFleet);
+  return <><button type="button" disabled={pending} onClick={() => { const f = new FormData(); f.set('id', claim); f.set('request', request); run(f); }}>Send a reminder</button>{result && <span className={result.ok ? 'form-note' : 'form-error'}> {result.message}</span>}</>;
+}
+
 // Insurer: ask for specific photos or documents. The fleet gets a checklist and each item ticks off when a file arrives.
-export function RequestItemsForm({ claim }: { claim: string }) {
+export function RequestItemsForm({ claim, replies = [] }: { claim: string; replies?: SavedReply[] }) {
   const { pending, result, onSubmit } = useAction(requestItems);
   const [other, setOther] = useState(false);
   return (
@@ -296,6 +348,7 @@ export function RequestItemsForm({ claim }: { claim: string }) {
         ))}
         {other && <label>What else do you need?<input name="otherLabel" required minLength={2} maxLength={120} autoComplete="off" placeholder="e.g. Dashcam footage" /></label>}
       </fieldset>
+      <ReplyPicker replies={replies} field="message" />
       <label>Message to the fleet (optional)<textarea name="message" rows={2} maxLength={1000} placeholder="Anything that helps them send the right thing, for example which side of the vehicle." /></label>
       <label>Needed by (optional)<input name="due" type="date" /></label>
       <div className="actions"><button disabled={pending}>Send request</button></div>
@@ -358,7 +411,7 @@ export function ItemBadge({ item }: { item: RequestItem }) {
   return <span className={'badge' + (st === 'waiting' ? ' warning' : '')}>{st === 'received' ? 'Received' : st === 'unavailable' ? 'Not available' : 'Waiting'}</span>;
 }
 
-export function InsurerPanel({ claim, status, reference }: { claim: string; status: string; reference: string }) {
+export function InsurerPanel({ claim, status, reference, replies = [], insurer = '' }: { claim: string; status: string; reference: string; replies?: SavedReply[]; insurer?: string }) {
   const start = useAction(startReview, false);
   const ask = useAction(askForInformation);
   const close = useAction(closeClaim, false);
@@ -383,12 +436,14 @@ export function InsurerPanel({ claim, status, reference }: { claim: string; stat
       </form>
       <form className="form-grid" onSubmit={ask.onSubmit}>
         <input type="hidden" name="id" value={claim} />
+        <ReplyPicker replies={replies} field="question" />
         <label>Ask the fleet for more information<textarea name="question" required minLength={3} maxLength={2000} rows={3} placeholder="What do you need? The fleet sees this on the claim and is notified." /></label>
         <label>Needed by (optional)<input name="due" type="date" /></label>
         <div className="actions"><button disabled={ask.pending}>Send question</button></div>
         {note(ask.result)}
       </form>
-      <details className="withdraw"><summary>Ask for specific photos or documents</summary><RequestItemsForm claim={claim} /></details>
+      <details className="withdraw"><summary>Ask for specific photos or documents</summary><RequestItemsForm claim={claim} replies={replies} /></details>
+      {insurer && <details className="withdraw"><summary>Manage my saved replies</summary><SavedRepliesManager claim={claim} insurer={insurer} replies={replies} /></details>}
       <details className="withdraw"><summary>Close this claim</summary>
         <form className="form-grid" onSubmit={close.onSubmit}>
           <input type="hidden" name="id" value={claim} />
