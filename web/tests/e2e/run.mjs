@@ -331,6 +331,7 @@ try {
     await go(page, base + '/claims'); let t = await text(page);
     check('the insurer now sees the claim', t.includes('AB10XYZ'), t.slice(0, 400));
     check('the insurer inbox shows queues and the unassigned sent claim', t.includes('Claims inbox') && t.includes('Unassigned') && t.includes('Assign or take'), t.slice(0, 600));
+    check('the insurer inbox has a waiting-on-fleet tile that links to that queue', await page.locator('a[href="/claims?queue=waiting"]').count() >= 2 && t.includes('Waiting on fleet'), t.slice(0, 500));
     check('the insurer inbox includes demonstration claims', t.includes('CLM-2026-000184') && t.includes('Demonstration') && t.includes('walk an insurer through the inbox'), t.slice(0, 700));
     await go(page, base + claimUrl); t = await text(page);
     check('the insurer sees the full report including photos', t.includes('Driver has a sore neck') && t.includes('damage.png'), t.slice(0, 500));

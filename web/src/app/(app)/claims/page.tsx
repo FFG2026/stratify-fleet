@@ -134,6 +134,7 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
       <Stats items={[
         ['Mine', counts.mine, 'Assigned to you', '/claims?queue=mine'],
         ['Unassigned', counts.unassigned, 'Nobody owns these', '/claims?queue=unassigned'],
+        ['Waiting on fleet', counts.waiting, 'We have asked, they have not replied', '/claims?queue=waiting'],
         ['Overdue', counts.overdue, 'A clock has run out', '/claims?queue=overdue'],
         ['Need action', counts.action, 'Unassigned, new, or your overdue', '/claims?queue=unassigned']
       ]} />
