@@ -17,7 +17,7 @@ export const eventTitle: Record<string, string> = {
   status_changed: 'Review started', reference_set: 'Insurer reference', info_requested: 'Insurer asked for information', reminder: 'Reminder',
   info_provided: 'Information provided', info_cancelled: 'Question withdrawn', note: 'Note', closed: 'Closed', reopened: 'Reopened',
   logged_by_insurer: 'Logged by the insurer', party_added: 'Person added', cue_queued: 'CUE record queued',
-  handler_assigned: 'Handler updated'
+  handler_assigned: 'Handler updated', tpa_assigned: 'TPA routing updated'
 };
 
 // Which claims need the person's attention, by side.

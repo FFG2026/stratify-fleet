@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, getClaim, getCoverRecord, getCueSubmissions, getPossibleDuplicates, getSavedReplies } from '@/lib/claims-data';
+import { claimSide, getClaim, getClaimTpa, listTpas, getCoverRecord, getCueSubmissions, getPossibleDuplicates, getSavedReplies } from '@/lib/claims-data';
 import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
@@ -12,6 +12,8 @@ import { ClockList } from '@/components/InboxViews';
 import { inboxFromClaim, listClaimHandlers } from '@/lib/claims-data';
 import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPriyaId, isDemoInboxClaim } from '@/lib/demo-inbox';
 import { handlerLabel } from '@/lib/inbox';
+import { tpaRecommendationLabel } from '@/lib/tpa';
+import { AssignTpaForm, TpaRecommendForm, TpaThreadForm } from '@/components/TpaForms';
 
 const yn = (v: boolean | null) => (v === null ? 'Not said' : v ? 'Yes' : 'No');
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
@@ -42,16 +44,19 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const canParty = open && (side === 'fleet' || (side === 'driver' && status === 'reported'));
   const openRequests = requests.filter(r => !r.answered_at && !r.cancelled_at);
   const fleetName = orgName(ctx, c.fleet_id);
-  const cover = await getCoverRecord(c.vehicle_id, c.incident_at).catch(() => null);
+  const cover = side === 'tpa' ? null : await getCoverRecord(c.vehicle_id, c.incident_at).catch(() => null);
   // CUE is the insurer's own claims-history contribution; the fleet and driver never see it. null means the CUE table is unavailable, so the panel is hidden.
   const cue = side === 'insurer' && c.submitted_at ? await getCueSubmissions(c.id).catch(() => null) : null;
   const inbox = side === 'insurer' && c.submitted_at ? inboxFromClaim(c, requests, !!cover?.after) : null;
   const handlers = inbox ? await listClaimHandlers(c.id) : [];
   const replies = side === 'insurer' ? await getSavedReplies(c.insurer_id) : [];
   const duplicates = side === 'insurer' && c.submitted_at ? await getPossibleDuplicates(c.id) : [];
+  // Third-party administrators: only the insurer and the TPA the claim is routed to can read this (row-level security).
+  const tpa = (side === 'insurer' || side === 'tpa') && c.submitted_at ? await getClaimTpa(c.id) : null;
+  const tpaChoices = side === 'insurer' && c.submitted_at && open ? (await listTpas(c.insurer_id)).filter(t => t.active) : [];
   return (
     <>
-      <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<>{side !== 'driver' && c.submitted_at && <LinkButton href={'/claims/' + c.id + '/summary'}>Summary to print or save</LinkButton>}<LinkButton href="/claims">← Claims</LinkButton></>} />
+      <PageHeader crumb="CLAIMS" title={c.reference} subtitle={side === 'tpa' ? c.registration : `${c.registration} · ${fleetName}`} actions={<>{side !== 'driver' && side !== 'tpa' && c.submitted_at && <LinkButton href={'/claims/' + c.id + '/summary'}>Summary to print or save</LinkButton>}<LinkButton href="/claims">← Claims</LinkButton></>} />
       {cover?.after && side !== 'driver' && <Notice alert><strong>Cover was recorded after the incident.</strong> {cover.startedAt ? `This vehicle's cover was added to the portal on ${londonDateTime(cover.recordedAt)}, after the incident at ${londonDateTime(c.incident_at)}.` : `This vehicle had no cover in the portal at the time of the incident. It was added later, on ${londonDateTime(cover.recordedAt)}.`} The insurer decides whether the claim is accepted.</Notice>}
       {sp.upload === 'failed' && <Notice alert>Your claim was saved, but some photos could not be uploaded. Add them below.</Notice>}
       <div className="claim-status">
@@ -93,6 +98,26 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
           </div></section>
           <ClockList claim={inbox} now={new Date()} />
         </>
+      )}
+      {(side === 'insurer' && (tpa?.routing || tpaChoices.length > 0)) && (
+        <section className="panel"><div className="panel-body">
+          <div className="cardhead"><h2>Third-party administrator</h2>{tpa?.routing && <Badge warn>{tpa.routing.tpas?.name ?? 'With a TPA'}</Badge>}</div>
+          <p className="subtext">A TPA can read this claim and recommend an outcome. You keep the decision and close the claim. The fleet never sees this.</p>
+          <TpaOutcome tpa={tpa} />
+          {open && tpaChoices.length > 0 && <AssignTpaForm claim={c.id} current={tpa?.routing?.tpa_id ?? null} tpas={tpaChoices} />}
+          <TpaThread tpa={tpa} />
+          {tpa?.routing && open && <TpaThreadForm claim={c.id} as="insurer" />}
+        </div></section>
+      )}
+      {side === 'tpa' && tpa && (
+        <section className="panel next-step"><div className="panel-body">
+          <h2>Your recommendation</h2>
+          <p className="subtext">You recommend an outcome and the insurer decides. You cannot contact the fleet or the driver, add files, or close the claim.</p>
+          <TpaOutcome tpa={tpa} />
+          {open ? <TpaRecommendForm claim={c.id} current={tpa.routing?.recommendation ?? null} currentNote={tpa.routing?.recommendation_note ?? null} /> : <Notice>This claim is closed.</Notice>}
+          <TpaThread tpa={tpa} />
+          {open && <TpaThreadForm claim={c.id} as="tpa" />}
+        </div></section>
       )}
       {side === 'insurer' && (
         <section className="panel next-step"><div className="panel-body">
@@ -183,7 +208,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
 
       {requests.length > 0 && (
         <section className="panel"><div className="panel-body">
-          <div className="cardhead"><h2>{side === 'insurer' ? 'Questions and requests you have sent' : 'Questions from the insurer'}</h2><Badge warn={openRequests.length > 0}>{openRequests.length} open</Badge></div>
+          <div className="cardhead"><h2>{side === 'insurer' ? 'Questions and requests you have sent' : side === 'tpa' ? 'Questions and requests' : 'Questions from the insurer'}</h2><Badge warn={openRequests.length > 0}>{openRequests.length} open</Badge></div>
           <ul className="requests">
             {requests.map(r => (
               <li key={r.id}>
@@ -209,7 +234,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
         <ol className="timeline">
           {[...events].reverse().map(e => (
             <li key={e.id}>
-              <div><strong>{eventTitle[e.kind] ?? e.kind}</strong> <span className="subtext">· {e.actor_label ?? sideName[e.side]}{e.actor_email ? ` (${e.actor_email})` : ''} · {londonDateTime(e.created_at)}</span>{e.visibility !== 'shared' && <> <Badge>Only {e.visibility === 'fleet' ? 'the fleet' : 'the insurer'}</Badge></>}</div>
+              <div><strong>{eventTitle[e.kind] ?? e.kind}</strong> <span className="subtext">· {e.actor_label ?? sideName[e.side]}{e.actor_email && side !== 'tpa' ? ` (${e.actor_email})` : ''} · {londonDateTime(e.created_at)}</span>{e.visibility !== 'shared' && <> <Badge>Only {e.visibility === 'fleet' ? 'the fleet' : 'the insurer'}</Badge></>}</div>
               {e.body && <p className="preline">{e.body}</p>}
             </li>
           ))}
@@ -217,6 +242,29 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
         {(side === 'fleet' || (side === 'insurer' && c.submitted_at)) && <NoteForm claim={c.id} replies={side === 'insurer' ? replies : undefined} label={side === 'insurer' ? 'Add a note for the fleet' : status === 'reported' ? 'Add a note' : 'Add a note for the insurer'} />}
       </div></section>
     </>
+  );
+}
+
+type TpaData = Awaited<ReturnType<typeof getClaimTpa>> | null;
+function TpaOutcome({ tpa }: { tpa: TpaData }) {
+  const rt = tpa?.routing;
+  if (!rt) return <p className="subtext">Not routed to a TPA.</p>;
+  return (
+    <>
+      <p className="subtext">Routed {londonDateTime(rt.assigned_at)}{rt.first_touched_at ? ` · first touched ${londonDateTime(rt.first_touched_at)}` : ' · not yet touched'}</p>
+      {rt.recommendation
+        ? <div className="request"><p><strong>Recommendation: {tpaRecommendationLabel[rt.recommendation]}</strong> <span className="subtext">· {rt.recommended_at ? londonDateTime(rt.recommended_at) : ''}</span></p>{rt.recommendation_note && <p className="preline">{rt.recommendation_note}</p>}<p className="subtext">The insurer makes the final decision.</p></div>
+        : <p className="subtext">No recommendation yet.</p>}
+    </>
+  );
+}
+function TpaThread({ tpa }: { tpa: TpaData }) {
+  const notes = tpa?.notes ?? [];
+  if (!notes.length) return null;
+  return (
+    <ol className="timeline">
+      {notes.map(n => <li key={n.id}><div><strong>{n.side === 'tpa' ? 'TPA' : 'Insurer'}</strong> <span className="subtext">· {n.author_email ?? ''} · {londonDateTime(n.created_at)}</span></div><p className="preline">{n.body}</p></li>)}
+    </ol>
   );
 }
 

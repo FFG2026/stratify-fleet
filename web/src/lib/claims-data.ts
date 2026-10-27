@@ -2,15 +2,16 @@ import 'server-only';
 import type { RequestItem } from '@/lib/claim-items';
 import { rest, rpc } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
-import { getMyCover, isDriverOnly, isInsurerSide, rolesOf } from '@/lib/data';
+import { getMyCover, isDriverOnly, isInsurerSide, isTpaOnly, rolesOf } from '@/lib/data';
 import type { Context } from '@/lib/types';
 import type { CueSubmission } from '@/lib/cue';
+import type { ClaimTpa, TpaMemberRow, TpaNote, TpaRow } from '@/lib/tpa';
 
-export type Side = 'driver' | 'fleet' | 'insurer';
+export type Side = 'driver' | 'fleet' | 'insurer' | 'tpa';
 // Which view of claims the person gets. Insurer staff and platform administrators see claims that have been sent to them.
 export const claimSide = (ctx: Context): Side | null =>
   ctx.demo ? 'insurer' : isDriverOnly(ctx) ? 'driver' : rolesOf(ctx).some(r => ['platform_super_admin', 'insurer_admin', 'insurer_claims'].includes(r)) ? 'insurer'
-    : rolesOf(ctx).some(r => ['fleet_admin', 'fleet_manager'].includes(r)) ? 'fleet' : null;
+    : rolesOf(ctx).some(r => ['fleet_admin', 'fleet_manager'].includes(r)) ? 'fleet' : isTpaOnly(ctx) ? 'tpa' : null;
 export const canReportClaims = (ctx: Context) => { const s = claimSide(ctx); return !ctx.demo && (s === 'driver' || s === 'fleet'); };
 export const canLogClaims = (ctx: Context) => !ctx.demo && claimSide(ctx) === 'insurer';
 export const claimFleetOf = (ctx: Context) => ctx.memberships.find(m => m.active && ['fleet_admin', 'fleet_manager', 'driver'].includes(m.role))?.organisation_id ?? null;
@@ -36,7 +37,7 @@ function withHandling(row: ClaimRow): ClaimRow {
 export type ClaimParty = { id: string; claim_id: string; kind: 'third_party' | 'witness'; name: string; phone: string | null; vehicle_registration: string | null; insurer_name: string | null; injured: boolean | null; notes: string | null; added_by: string };
 export type ClaimEvent = { id: string; kind: string; side: 'driver' | 'fleet' | 'insurer'; visibility: string; actor_label: string | null; actor_email: string | null; body: string | null; created_at: string };
 export type ClaimRequest = { id: string; claim_id?: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null; last_reminded_at?: string | null; reminder_count?: number };
-export type ClaimFile = { id: string; request_id: string | null; kind: 'photo' | 'document'; file_name: string; content_type: string; size_bytes: number; caption: string | null; uploaded_by: string; uploaded_side: Side; uploaded_at: string };
+export type ClaimFile = { id: string; request_id: string | null; kind: 'photo' | 'document'; file_name: string; content_type: string; size_bytes: number; caption: string | null; uploaded_by: string; uploaded_side: Exclude<Side, 'tpa'>; uploaded_at: string };
 export type Notice = { id: string; claim_id: string | null; kind: string; title: string; body: string | null; created_at: string; read_at: string | null };
 
 const clean = (q: string) => q.replace(/[^A-Za-z0-9 -]/g, '').trim().slice(0, 30);
@@ -178,4 +179,23 @@ export async function getPossibleDuplicates(claimId: string): Promise<PossibleDu
 // The digest is on unless the person has opted out. Only their own row is readable.
 export async function digestOn(): Promise<boolean> {
   try { return (await rest<{ user_id: string }[]>('/rest/v1/digest_optout?select=user_id&limit=1')).length === 0; } catch { return true; }
+}
+
+// ---- third-party administrators. Row-level security shows these only to the insurer and to the TPA the claim is routed to.
+export async function getClaimTpa(claimId: string): Promise<{ routing: ClaimTpa | null; notes: TpaNote[] }> {
+  const c = checkedId(claimId);
+  try {
+    const [routing, notes] = await Promise.all([
+      rest<ClaimTpa[]>(`/rest/v1/claim_tpa?select=claim_id,tpa_id,assigned_at,first_touched_at,recommendation,recommendation_note,recommended_at,tpas(name)&claim_id=eq.${c}`),
+      rest<TpaNote[]>(`/rest/v1/claim_tpa_notes?select=id,side,author_email,body,created_at&claim_id=eq.${c}&order=created_at.asc&limit=300`)
+    ]);
+    return { routing: routing[0] ?? null, notes };
+  } catch { return { routing: null, notes: [] }; }
+}
+export async function listTpas(insurerId?: string): Promise<TpaRow[]> {
+  const filter = insurerId ? '&insurer_id=eq.' + checkedId(insurerId) : '';
+  return rest<TpaRow[]>('/rest/v1/tpas?select=id,name,active,insurer_id&order=name.asc&limit=200' + filter).catch(() => []);
+}
+export async function listTpaMembers(tpaId: string): Promise<TpaMemberRow[]> {
+  try { return await rpc<TpaMemberRow[]>('list_tpa_members', { p_tpa: checkedId(tpaId) }); } catch { return []; }
 }

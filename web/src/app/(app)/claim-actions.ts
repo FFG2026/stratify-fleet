@@ -12,6 +12,10 @@ import { insurerOutcomes, londonToIso, yesNo } from '@/lib/claims';
 import { maxFileBytes, sniffFile } from '@/lib/drivers';
 import { deleteFile, uploadFile } from '@/lib/storage';
 import { getNotices, claimFleetOf, claimSide, getClaimBasic, getClaimFile, myVehicleIdByRegistration, vehicleIdByRegistration } from '@/lib/claims-data';
+import { createLogin } from '@/lib/admin-auth';
+import { memberEmail } from '@/lib/members';
+import { isTpaRecommendation } from '@/lib/tpa';
+import { emailAccess } from '@/lib/notify-email';
 import type { ActionResult } from '@/components/useAction';
 
 export type ClaimResult = ActionResult & { id?: string };
@@ -345,4 +349,102 @@ export async function bulkRequestItems(form: FormData): Promise<ClaimResult> {
 export async function recentUnread(): Promise<{ id: string; claim_id: string | null; title: string; body: string | null }[]> {
   try { await requireContext(); return (await getNotices(8)).filter(n => !n.read_at).slice(0, 5).map(n => ({ id: n.id, claim_id: n.claim_id, title: n.title, body: n.body })); }
   catch { return []; }
+}
+
+// ---- third-party administrators (TPAs). The insurer keeps the decision; a TPA only recommends. The fleet never sees any of this.
+const demoStop = { ok: false, message: 'The demo account is read-only.' } as const;
+const tpaStop = (message: string) => Object.assign(new Error(message), { status: 400 });
+const refreshTpa = (id?: string) => { revalidatePath('/tpas'); refresh(id); };
+
+export async function createTpa(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    const name = str(form, 'name', 120);
+    if (name.length < 2) throw tpaStop('Enter the TPA\'s name.');
+    await rpc('create_tpa', { p_insurer: checkedId(form.get('insurer')), p_name: name });
+    revalidatePath('/tpas');
+    return done(name + ' was added. Now add the people who will work claims for it.');
+  } catch (error) { return fail(error); }
+}
+export async function setTpaActive(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    const on = form.get('active') === 'yes';
+    await rpc('set_tpa_active', { p_tpa: checkedId(form.get('tpa')), p_active: on });
+    revalidatePath('/tpas');
+    return done(on ? 'TPA switched on.' : 'TPA switched off. Its people can no longer see claims.');
+  } catch (error) { return fail(error); }
+}
+export async function addTpaMember(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    const tpa = checkedId(form.get('tpa')), email = memberEmail(form.get('email')), name = str(form, 'tpaName', 120) || 'a TPA';
+    const raw = str(form, 'password', 72);
+    let outcome = await rpc<string>('add_tpa_member', { p_tpa: tpa, p_email: email });
+    if (outcome === 'no_login') {
+      if (!raw) { return { ok: false, message: 'That person has no login yet. Enter a temporary password (at least 8 characters) to create one.' }; }
+      if (raw.length < 8) throw tpaStop('The temporary password must be at least 8 characters.');
+      if (raw.toLowerCase().includes(email.split('@')[0])) throw tpaStop('The temporary password must not contain the email name.');
+      await createLogin(email, raw);
+      outcome = await rpc<string>('add_tpa_member', { p_tpa: tpa, p_email: email });
+    }
+    revalidatePath('/tpas');
+    after(() => emailAccess(email, name, 'a claims administrator', !!raw));
+    return done(raw ? `${email} was added with a temporary password. They must choose their own at first sign-in.` : `${email} was added.`);
+  } catch (error) { return fail(error); }
+}
+export async function setTpaMemberActive(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    const on = form.get('active') === 'yes';
+    await rpc('set_tpa_member_active', { p_member: checkedId(form.get('member')), p_active: on });
+    revalidatePath('/tpas');
+    return done(on ? 'Access restored.' : 'Access removed.');
+  } catch (error) { return fail(error); }
+}
+export async function assignTpa(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    if (claimSide(ctx) !== 'insurer') return { ok: false, message: 'Only insurer claims staff can route a claim to a TPA.' };
+    const id = checkedId(form.get('id'));
+    const raw = String(form.get('tpa') ?? '').trim();
+    await rpc('assign_claim_tpa', { p_claim: id, p_tpa: raw ? checkedId(raw) : null });
+    refreshTpa(id);
+    return done(raw ? 'Routed to the TPA. They have been told.' : 'Taken back from the TPA.', id);
+  } catch (error) { return fail(error); }
+}
+export async function insurerTpaNote(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    if (claimSide(ctx) !== 'insurer') return { ok: false, message: 'Only insurer claims staff can write to the TPA.' };
+    const id = checkedId(form.get('id')), body = str(form, 'body', 4000);
+    if (!body) throw tpaStop('Write a note first.');
+    await rpc('insurer_tpa_note', { p_claim: id, p_body: body });
+    refreshTpa(id);
+    return done('Sent to the TPA.', id);
+  } catch (error) { return fail(error); }
+}
+export async function tpaNote(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    if (claimSide(ctx) !== 'tpa') return { ok: false, message: 'Only a TPA can use this.' };
+    const id = checkedId(form.get('id')), body = str(form, 'body', 4000);
+    if (!body) throw tpaStop('Write a note first.');
+    await rpc('tpa_add_note', { p_claim: id, p_body: body });
+    refreshTpa(id);
+    return done('Sent to the insurer.', id);
+  } catch (error) { return fail(error); }
+}
+export async function tpaRecommend(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    if (claimSide(ctx) !== 'tpa') return { ok: false, message: 'Only a TPA can use this.' };
+    const id = checkedId(form.get('id')), rec = form.get('recommendation');
+    if (!isTpaRecommendation(rec)) throw tpaStop('Choose a recommendation.');
+    const note = str(form, 'note', 2000);
+    if (note.length < 3) throw tpaStop('Add a short reason for the insurer.');
+    await rpc('tpa_recommend', { p_claim: id, p_recommendation: rec, p_note: note });
+    refreshTpa(id);
+    return done('Recommendation sent. The insurer makes the final decision.', id);
+  } catch (error) { return fail(error); }
 }

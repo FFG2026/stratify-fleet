@@ -17,7 +17,7 @@ export default async function ClaimSummary({ params }: { params: Promise<{ id: s
   const ctx = await getContext();
   if (!ctx) redirect('/login');
   const side = claimSide(ctx);
-  if (!side || side === 'driver' || ctx.demo) notFound();
+  if (!side || side === 'driver' || side === 'tpa' || ctx.demo) notFound();
   let id: string;
   try { id = checkedId((await params).id); } catch { notFound(); }
   const data = await getClaim(id).catch(() => null);

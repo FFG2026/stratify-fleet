@@ -6,7 +6,7 @@ import { getEnv } from '@/lib/env';
 import { ApplyBranding } from '@/components/ApplyBranding';
 import { adminRoles, mfaRequiredForAdmins } from '@/lib/mfa';
 import { Suspense } from 'react';
-import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, canViewAudit, rolesOf, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, orgName } from '@/lib/data';
+import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, canViewAudit, rolesOf, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, isTpaOnly, canManageTpas, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
@@ -17,7 +17,7 @@ import { NotificationToasts } from '@/components/NotificationToasts';
 
 export const dynamic = 'force-dynamic';
 
-const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; fleet?: boolean; admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean; telematics?: boolean })[] = [
+const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; fleet?: boolean; admin?: boolean; platform?: boolean; insurer?: boolean; staff?: boolean; telematics?: boolean; tpa?: boolean })[] = [
   { href: '/overview', label: 'Platform overview', icon: '◈', platform: true },
   { href: '/insurer', label: 'Insurer dashboard', icon: '▦', insurer: true },
   { href: '/customer', label: 'Fleet dashboard', icon: '⌂', fleet: true },
@@ -32,6 +32,7 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/audit', label: 'Audit log', icon: '☰', audit: true },
   { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true },
   { href: '/users', label: 'Users', icon: '◎', admin: true },
+  { href: '/tpas', label: 'TPAs', icon: '⇢', tpa: true },
   { href: '/install', label: 'Install on phone', icon: '▯' }
 ];
 const planned: NavItem[] = [
@@ -49,6 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   const brand = ctx.demo ? null : (await rpc<{ display_name: string | null; accent: string | null; logo_path?:string|null }[]>('my_branding', {}).catch(() => []))[0] ?? null;
   const driver = isDriverOnly(ctx);
+  const tpaOnly = isTpaOnly(ctx);
   const driverNav: NavItem[] = [
     { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
     { href: '/drivers', label: 'Drivers & licences', icon: '◎' },
@@ -58,17 +60,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
-  const items = (driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
-  if (!driver && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
+  const tpaNav: NavItem[] = [{ href: '/claims', label: 'Claims', icon: '⚑' }];
+  const items = (tpaOnly ? tpaNav : driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.tpa || canManageTpas(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
+  if (!driver && !tpaOnly && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
       {claimsOn && !ctx.demo && <NotificationToasts />}
       <ApplyBranding accent={brand?.accent ?? null} />
-      <Sidebar brandLogo={brand?.logo_path && getEnv() ? getEnv()!.url+'/storage/v1/object/public/insurer-logos/'+brand.logo_path.split('/').map(encodeURIComponent).join('/') : null} brandName={brand?.display_name ?? null} items={items} planned={driver ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
+      <Sidebar brandLogo={brand?.logo_path && getEnv() ? getEnv()!.url+'/storage/v1/object/public/insurer-logos/'+brand.logo_path.split('/').map(encodeURIComponent).join('/') : null} brandName={brand?.display_name ?? null} items={items} planned={driver || tpaOnly ? [] : planned.filter(p => p.href !== '/crm' && !(p.href === '/drivers' && (ctx.demo || canViewDrivers(ctx))))} />
       <div className="main">
         <header className="topbar">
-          {driver ? <span /> : <Suspense fallback={null}>
+          {driver || tpaOnly ? <span /> : <Suspense fallback={null}>
             <PolicySwitcher policies={ctx.policies.map(p => ({ value: p.id, label: `${orgName(ctx, p.customer_id)} · ${p.reference}` }))} />
           </Suspense>}
           <div className="account">

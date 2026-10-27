@@ -29,7 +29,8 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
   }
   if (side === 'insurer') return <InsurerInbox ctx={ctx} searchParams={searchParams} />;
   const sp = await searchParams;
-  const view = views.some(v => v[0] === sp.view) ? sp.view! : side === 'driver' ? 'all' : 'open';
+  const quiet = side === 'driver' || side === 'tpa';
+  const view = views.some(v => v[0] === sp.view && !(quiet && v[0] === 'action')) ? sp.view! : side === 'driver' ? 'all' : 'open';
   const actionStatuses = needsFleetAction;
   const status = view === 'open' ? 'open' : view === 'closed' ? 'closed' : view === 'action' ? 'in:' + actionStatuses.join(',') : undefined;
   const offset = Math.max(0, Number(sp.offset) || 0);
@@ -40,7 +41,7 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
   try {
     const [pg, nt, nOpen, nAction, nInjury, nClosed] = await Promise.all([
       listClaims({ status, q: sp.q, offset, limit: 25 }), getNotices(8), countClaims('status=neq.closed'),
-      side === 'driver' ? Promise.resolve(0) : countClaims('status=in.(' + actionStatuses.join(',') + ')'), countClaims('status=neq.closed&anyone_injured=eq.true'), countClaims('status=eq.closed')
+      quiet ? Promise.resolve(0) : countClaims('status=in.(' + actionStatuses.join(',') + ')'), countClaims('status=neq.closed&anyone_injured=eq.true'), countClaims('status=eq.closed')
     ]);
     page = pg; notices = nt; counts = { open: nOpen, action: nAction, injury: nInjury, closed: nClosed };
   } catch (e) { error = e instanceof Error ? e.message : 'Unable to load claims.'; }
@@ -49,12 +50,12 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
   return (
     <>
       <PageHeader crumb="CLAIMS" title="Claims / FNOL"
-        subtitle={side === 'fleet' ? 'Claims reported by your drivers and your team. Review them, then send them to the insurer.' : 'Report an incident and follow your claims.'}
+        subtitle={side === 'tpa' ? 'Claims the insurer has routed to you. Recommend an outcome; the insurer decides.' : side === 'fleet' ? 'Claims reported by your drivers and your team. Review them, then send them to the insurer.' : 'Report an incident and follow your claims.'}
         actions={canReportClaims(ctx) ? <LinkButton primary href="/claims/new">Report a claim</LinkButton> : undefined} />
       {error && <Notice alert>{error}</Notice>}
       <Stats items={[
         ['Open claims', counts.open, 'Not yet closed', '/claims?view=open'],
-        ...(side === 'driver' ? [] : [['Need action', counts.action, 'To review, send or answer', '/claims?view=action'] as [string, number, string, string]]),
+        ...(quiet ? [] : [['Need action', counts.action, 'To review, send or answer', '/claims?view=action'] as [string, number, string, string]]),
         ['Injury reported', counts.injury, 'Open claims', '/claims?view=open'],
         ['Closed', counts.closed, 'Completed', '/claims?view=closed']
       ]} />
@@ -73,7 +74,7 @@ export default async function Claims({ searchParams }: { searchParams: Promise<S
         </section>
       )}
       <div className="tabs-row" role="tablist" aria-label="Claim views">
-        {views.filter(v => side !== 'driver' || v[0] !== 'action').map(([key, label]) => <Link key={key} prefetch={false} className={'button-link' + (view === key ? ' primary' : '')} href={'/claims?view=' + key}>{label}</Link>)}
+        {views.filter(v => !quiet || v[0] !== 'action').map(([key, label]) => <Link key={key} prefetch={false} className={'button-link' + (view === key ? ' primary' : '')} href={'/claims?view=' + key}>{label}</Link>)}
         <form className="crm-search" action="/claims"><input type="hidden" name="view" value="all" /><input name="q" defaultValue={sp.q ?? ''} placeholder="Reference or registration" aria-label="Search claims" /><button>Search</button></form>
       </div>
       <section className="panel">
