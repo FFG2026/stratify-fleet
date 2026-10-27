@@ -14,7 +14,7 @@ export const originLabel: Record<string, string> = { driver: 'Reported by the dr
 
 export const eventTitle: Record<string, string> = {
   reported: 'Claim reported', updated: 'Details changed', assessed: 'Reviewed by the fleet', submitted: 'Sent to the insurer',
-  status_changed: 'Review started', reference_set: 'Insurer reference', info_requested: 'Insurer asked for information',
+  status_changed: 'Review started', reference_set: 'Insurer reference', info_requested: 'Insurer asked for information', reminder: 'Reminder',
   info_provided: 'Information provided', info_cancelled: 'Question withdrawn', note: 'Note', closed: 'Closed', reopened: 'Reopened',
   logged_by_insurer: 'Logged by the insurer', party_added: 'Person added', cue_queued: 'CUE record queued',
   handler_assigned: 'Handler updated'

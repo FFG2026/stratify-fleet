@@ -13,15 +13,16 @@ const fleetOf = (ctx: Context, id: string) => {
   return live !== '—' ? live : demoFleetLabel(id) ?? '—';
 };
 
-export function InboxTable({ ctx, rows, me, now }: { ctx: Context; rows: InboxClaim[]; me: string; now: Date }) {
+export function InboxTable({ ctx, rows, me, now, selectable = false }: { ctx: Context; rows: InboxClaim[]; me: string; now: Date; selectable?: boolean }) {
   return (
     <div className="table-scroll"><table>
-      <thead><tr><th>Reference</th><th>Fleet</th><th>Why it is here</th><th>Handler</th><th>Clock</th><th>Wait</th><th>Status</th><th>Next step</th></tr></thead>
+      <thead><tr>{selectable && <th><span className="sr-only">Select</span></th>}<th>Reference</th><th>Fleet</th><th>Why it is here</th><th>Handler</th><th>Clock</th><th>Wait</th><th>Status</th><th>Next step</th></tr></thead>
       <tbody>
         {rows.map(c => {
           const clock = urgentClock(clocksOf(c, now));
           return (
             <tr key={c.id}>
+              {selectable && <td>{isDemoInboxClaim(c.id) ? null : <input type="checkbox" name="claim" value={c.id} form="bulk" aria-label={'Select ' + c.reference} />}</td>}
               <td><Link prefetch={false} href={'/claims/' + c.id}><strong>{c.reference}</strong></Link>
                 <span className="subtext">{c.registration}{c.driver_name ? ' · ' + c.driver_name : ''}</span></td>
               <td>{fleetOf(ctx, c.fleet_id)}</td>

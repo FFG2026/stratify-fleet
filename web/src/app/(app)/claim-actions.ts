@@ -278,3 +278,65 @@ export async function assignClaimHandler(form: FormData): Promise<ClaimResult> {
     return done(handler ? (handler === ctx.user.id ? 'You have taken this claim.' : 'Handler updated.') : 'Returned to the unassigned pile.', id);
   } catch (error) { return fail(error); }
 }
+
+// ---- insurer tools: reminders, saved replies, bulk actions, digest
+export async function remindFleet(form: FormData): Promise<ClaimResult> {
+  try { await requireContext(); const id = checkedId(form.get('id')); await rpc('remind_fleet', { p_claim: id, p_request: checkedId(form.get('request')) }); refresh(id); return done('Reminder sent. The fleet is notified.', id); }
+  catch (error) { return fail(error); }
+}
+export async function saveReply(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext();
+    if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+    const id = checkedId(form.get('id'));
+    await rpc('save_reply', { p_insurer: checkedId(form.get('insurer')), p_title: str(form, 'title', 80), p_body: str(form, 'body', 1000) });
+    revalidatePath('/claims/' + id);
+    return done('Saved.', id);
+  } catch (error) { return fail(error); }
+}
+export async function deleteReply(form: FormData): Promise<ClaimResult> {
+  try { await requireContext(); const id = checkedId(form.get('id')); await rpc('delete_saved_reply', { p_id: checkedId(form.get('reply')) }); revalidatePath('/claims/' + id); return done('Deleted.', id); }
+  catch (error) { return fail(error); }
+}
+export async function setDigest(form: FormData): Promise<ClaimResult> {
+  try { await requireContext(); await rpc('set_digest', { p_enabled: form.get('enabled') === 'yes' }); revalidatePath('/claims'); return done(form.get('enabled') === 'yes' ? 'Daily email on.' : 'Daily email off.'); }
+  catch (error) { return fail(error); }
+}
+
+// Bulk actions run the same single-claim functions one after another, so every claim is checked and audited on its own.
+const claimIds = (form: FormData) => {
+  const ids = [...new Set(form.getAll('claim').map(v => String(v)))];
+  if (!ids.length) throw Object.assign(new Error('Tick at least one claim first.'), { status: 400 });
+  if (ids.length > 50) throw Object.assign(new Error('Choose up to 50 claims at a time.'), { status: 400 });
+  return ids.map(checkedId);
+};
+async function eachClaim(ids: string[], verb: string, one: (id: string) => Promise<unknown>): Promise<ClaimResult> {
+  let ok = 0; const problems: string[] = [];
+  for (const id of ids) { try { await one(id); ok++; } catch (e) { problems.push(messageOf(e)); } }
+  revalidatePath('/claims');
+  after(() => Promise.all(ids.map(id => emailClaimNotifications(id))));
+  const failed = ids.length - ok;
+  return { ok: failed === 0, message: failed ? `${verb} ${ok} of ${ids.length}. ${[...new Set(problems)].slice(0, 2).join(' ')}` : `${verb} ${ok} claim${ok === 1 ? '' : 's'}.` };
+}
+export async function bulkAssign(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext();
+    if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+    if (claimSide(ctx) !== 'insurer') return { ok: false, message: 'Only insurer claims staff can assign a handler.' };
+    const ids = claimIds(form);
+    const raw = String(form.get('handler') ?? '').trim();
+    const handler = raw === 'unassign' ? null : checkedId(raw === 'me' ? ctx.user.id : raw);
+    return await eachClaim(ids, handler ? 'Assigned' : 'Returned', id => rpc('assign_claim_handler', { p_claim: id, p_handler: handler }));
+  } catch (error) { return fail(error); }
+}
+export async function bulkRequestItems(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext();
+    if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+    const ids = claimIds(form);
+    const items = itemsFromForm({ items: form.getAll('item').map(String), otherLabel: String(form.get('otherLabel') ?? '') });
+    const due = String(form.get('due') ?? '').trim(); if (due) parseDate(due);
+    const message = str(form, 'message', 1000);
+    return await eachClaim(ids, 'Requested from', id => rpc('request_claim_items', { p_claim: id, p_items: items, p_message: message || null, p_due: due || null }));
+  } catch (error) { return fail(error); }
+}

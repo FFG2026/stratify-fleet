@@ -1,12 +1,13 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, countClaims, getNotices, listClaims, listInboxClaims, canLogClaims, canReportClaims, type ClaimRow } from '@/lib/claims-data';
+import { digestOn, listClaimHandlers, claimSide, countClaims, getNotices, listClaims, listInboxClaims, canLogClaims, canReportClaims, type ClaimRow } from '@/lib/claims-data';
 import { statusLabel, needsFleetAction, type ClaimStatus } from '@/lib/claims';
 import { PageHeader, Badge, Notice, Stats, LinkButton, Pagination } from '@/components/ui';
 import { MarkRead } from '@/components/ClaimForms';
+import { BulkBar, DigestToggle } from '@/components/InboxBulk';
 import { InboxTable } from '@/components/InboxViews';
-import { demoInboxClaims } from '@/lib/demo-inbox';
+import { demoInboxClaims, isDemoInboxClaim } from '@/lib/demo-inbox';
 import { filterInbox, inboxCounts, inboxQueues, type InboxQueue } from '@/lib/inbox';
 import { londonDateTime, londonShortDate } from '@/lib/dates';
 
@@ -124,6 +125,10 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
   const visible = filterInbox(searched, queue, me, now);
   const counts = inboxCounts(rows, me, now);
   const unread = notices.filter(n => !n.read_at);
+  const firstLive = visible.find(c => !isDemoInboxClaim(c.id));
+  const bulk = !ctx.demo && !!firstLive;
+  const handlers = bulk && firstLive ? await listClaimHandlers(firstLive.id) : [];
+  const digest = ctx.demo ? true : await digestOn();
   return (
     <>
       <PageHeader crumb="CLAIMS" title="Claims inbox"
@@ -152,6 +157,7 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
           </ul>
         </section>
       )}
+      {!ctx.demo && <DigestToggle on={digest} />}
       <div className="tabs-row" role="tablist" aria-label="Inbox queues">
         {inboxQueues.map(item => (
           <Link key={item.id} prefetch={false} className={'button-link' + (queue === item.id ? ' primary' : '')} href={'/claims?queue=' + item.id}>
@@ -161,7 +167,8 @@ async function InsurerInbox({ ctx, searchParams }: { ctx: NonNullable<Awaited<Re
         <form className="crm-search" action="/claims"><input type="hidden" name="queue" value={queue} /><input name="q" defaultValue={sp.q ?? ''} placeholder="Reference or registration" aria-label="Search claims" /><button>Search</button></form>
       </div>
       <section className="panel">
-        <InboxTable ctx={ctx} rows={visible} me={me} now={now} />
+        {bulk && <BulkBar handlers={handlers} me={me} />}
+        <InboxTable ctx={ctx} rows={visible} me={me} now={now} selectable={bulk} />
         {!visible.length && <div className="empty">{q ? 'No claims match that search in this queue.' : 'Nothing in this queue.'}</div>}
       </section>
     </>

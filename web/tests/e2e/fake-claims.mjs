@@ -4,7 +4,7 @@
 import { randomUUID as uid } from 'node:crypto';
 
 export function createClaims(ids) {
-  const db = { claims: [], parties: [], events: [], requests: [], files: [], notices: [], items: [] };
+  const db = { claims: [], parties: [], events: [], requests: [], files: [], notices: [], items: [], replies: [], optout: false };
   const sideOf = u => (u.role === 'driver' ? 'driver' : ['insurer_admin', 'platform_super_admin'].includes(u.role) ? 'insurer' : ['fleet_admin', 'fleet_manager'].includes(u.role) ? 'fleet' : null);
   const visible = (c, u) => { const s = sideOf(u); return s === 'fleet' ? c.fleet_id === u.org : s === 'insurer' ? !!c.submitted_at && (u.see === 'all' || u.see.includes(c.fleet_id)) : s === 'driver' ? c.reported_by === u.id || c.driver_user_id === u.id : false; };
   const err = message => { const e = new Error(message); e.http = 400; return e; };
@@ -124,6 +124,17 @@ export function createClaims(ids) {
         if (db.items.filter(x => x.request_id === it.request_id).every(x => x.fulfilled_at)) { const r = db.requests.find(x => x.id === it.request_id); r.answered_at = now(); settle(c); notice('insurer:' + c.insurer_id, c, 'info_provided', 'More information on ' + c.reference, null); }
         touch(c); return null;
       }
+      case 'remind_fleet': {
+        const r = db.requests.find(x => x.id === b.p_request); const c = find(b.p_claim);
+        if (!r || !open(r)) throw err('that request is no longer open');
+        if (r.last_reminded_at && Date.now() - Date.parse(r.last_reminded_at) < 86400000) throw err('the fleet was already reminded in the last 24 hours');
+        r.last_reminded_at = now(); r.reminder_count = (r.reminder_count || 0) + 1;
+        event(c, 'reminder', 'insurer', 'shared', 'Reminder from the insurer: ' + r.question, email); notice('fleet:' + c.fleet_id, c, 'info_requested', 'Reminder: the insurer is still waiting on ' + c.reference, r.question); touch(c); return null;
+      }
+      case 'save_reply': { const id = uid(); db.replies.push({ id, insurer_id: b.p_insurer, title: b.p_title, body: b.p_body }); return id; }
+      case 'delete_saved_reply': db.replies = db.replies.filter(r => r.id !== b.p_id); return null;
+      case 'set_digest': db.optout = !b.p_enabled; return null;
+      case 'claim_possible_duplicates': { const c = find(b.p_claim); return db.claims.filter(o => o.id !== c.id && o.fleet_id === c.fleet_id && o.registration === c.registration && o.submitted_at && Math.abs(Date.parse(o.incident_at) - Date.parse(c.incident_at)) <= 7 * 86400000).map(o => ({ id: o.id, reference: o.reference, incident_at: o.incident_at, status: o.status, location: o.location })); }
       case 'cancel_claim_request': { const r = db.requests.find(x => x.id === b.p_request); r.cancelled_at = now(); const c = find(r.claim_id); settle(c); event(c, 'info_cancelled', 'insurer', 'shared', 'The insurer withdrew a question: ' + r.question, email); return null; }
       case 'respond_claim_request': {
         const r = db.requests.find(x => x.id === b.p_request); if (!open(r)) throw err('that question is no longer open');
@@ -206,6 +217,8 @@ export function createClaims(ids) {
       if (q.get('cancelled_at') === 'is.null') rows = rows.filter(r => !r.cancelled_at);
       return rows;
     }
+    if (path === 'saved_replies') return db.replies.filter(r => r.insurer_id === eq('insurer_id'));
+    if (path === 'digest_optout') return db.optout ? [{ user_id: u.id }] : [];
     if (path === 'claim_request_items') return claimOf() ? db.items.filter(i => i.claim_id === eq('claim_id')) : [];
     if (path === 'claim_attachments') {
       if (eq('id')) { const f = db.files.find(x => x.id === eq('id') && !x.deleted); const c = f && db.claims.find(x => x.id === f.claim_id); return f && c && visible(c, u) ? [f] : []; }

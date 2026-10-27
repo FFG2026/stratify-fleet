@@ -3,5 +3,6 @@
   "framework": "nextjs",
   "buildCommand": null,
   "installCommand": null,
-  "outputDirectory": null
+  "outputDirectory": null,
+  "crons": [{ "path": "/api/cron/claims", "schedule": "30 7 * * *" }]
 }

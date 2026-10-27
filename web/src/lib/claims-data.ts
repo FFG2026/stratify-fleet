@@ -35,7 +35,7 @@ function withHandling(row: ClaimRow): ClaimRow {
 }
 export type ClaimParty = { id: string; claim_id: string; kind: 'third_party' | 'witness'; name: string; phone: string | null; vehicle_registration: string | null; insurer_name: string | null; injured: boolean | null; notes: string | null; added_by: string };
 export type ClaimEvent = { id: string; kind: string; side: 'driver' | 'fleet' | 'insurer'; visibility: string; actor_label: string | null; actor_email: string | null; body: string | null; created_at: string };
-export type ClaimRequest = { id: string; claim_id?: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null };
+export type ClaimRequest = { id: string; claim_id?: string; question: string; due_on: string | null; requested_at: string; answered_at: string | null; answer: string | null; cancelled_at: string | null; last_reminded_at?: string | null; reminder_count?: number };
 export type ClaimFile = { id: string; request_id: string | null; kind: 'photo' | 'document'; file_name: string; content_type: string; size_bytes: number; caption: string | null; uploaded_by: string; uploaded_side: Side; uploaded_at: string };
 export type Notice = { id: string; claim_id: string | null; kind: string; title: string; body: string | null; created_at: string; read_at: string | null };
 
@@ -62,7 +62,7 @@ export async function getClaim(id: string) {
     rest<ClaimRow[]>('/rest/v1/claims?select=*,' + HANDLING + '&id=eq.' + c),
     rest<ClaimParty[]>(`/rest/v1/claim_parties?select=*&claim_id=eq.${c}&order=created_at.asc&limit=50`),
     rest<ClaimEvent[]>(`/rest/v1/claim_events?select=id,kind,side,visibility,actor_label,actor_email,body,created_at&claim_id=eq.${c}&order=created_at.asc&limit=500`),
-    rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,question,due_on,requested_at,answered_at,answer,cancelled_at&claim_id=eq.${c}&order=requested_at.asc&limit=100`),
+    rest<ClaimRequest[]>(`/rest/v1/claim_requests?select=id,question,due_on,requested_at,answered_at,answer,cancelled_at,last_reminded_at,reminder_count&claim_id=eq.${c}&order=requested_at.asc&limit=100`),
     rest<ClaimFile[]>(`/rest/v1/claim_attachments?select=id,request_id,kind,file_name,content_type,size_bytes,caption,uploaded_by,uploaded_side,uploaded_at&claim_id=eq.${c}&order=uploaded_at.asc&limit=100`),
     rest<RequestItem[]>(`/rest/v1/claim_request_items?select=id,request_id,kind,label,created_at,fulfilled_at,attachment_id,unavailable_reason&claim_id=eq.${c}&order=created_at.asc&limit=100`)
   ]);
@@ -165,4 +165,17 @@ export function inboxFromClaim(row: ClaimRow, requests: ClaimRequest[], coverAft
 export async function listClaimHandlers(claimId: string): Promise<ClaimHandler[]> {
   try { return await rpc<ClaimHandler[]>('list_claim_handlers', { p_claim: checkedId(claimId) }); }
   catch { return []; }
+}
+
+export type SavedReply = { id: string; title: string; body: string };
+export type PossibleDuplicate = { id: string; reference: string; incident_at: string; status: string; location: string };
+export async function getSavedReplies(insurerId: string): Promise<SavedReply[]> {
+  return rest<SavedReply[]>(`/rest/v1/saved_replies?select=id,title,body&insurer_id=eq.${checkedId(insurerId)}&order=created_at.asc&limit=30`).catch(() => []);
+}
+export async function getPossibleDuplicates(claimId: string): Promise<PossibleDuplicate[]> {
+  try { return await rpc<PossibleDuplicate[]>('claim_possible_duplicates', { p_claim: checkedId(claimId) }); } catch { return []; }
+}
+// The digest is on unless the person has opted out. Only their own row is readable.
+export async function digestOn(): Promise<boolean> {
+  try { return (await rest<{ user_id: string }[]>('/rest/v1/digest_optout?select=user_id&limit=1')).length === 0; } catch { return true; }
 }

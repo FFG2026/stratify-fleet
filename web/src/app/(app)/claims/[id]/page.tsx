@@ -1,12 +1,13 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getContext, orgName } from '@/lib/data';
-import { claimSide, getClaim, getCoverRecord, getCueSubmissions } from '@/lib/claims-data';
+import { claimSide, getClaim, getCoverRecord, getCueSubmissions, getPossibleDuplicates, getSavedReplies } from '@/lib/claims-data';
 import { checkedId } from '@/lib/ids';
 import { claimGaps, eventTitle, originLabel, outcomeLabel, statusLabel, type ClaimStatus } from '@/lib/claims';
 import { londonDate, londonDateTime } from '@/lib/dates';
 import { PageHeader, Badge, Notice, LinkButton } from '@/components/ui';
 import { itemProgress, itemTitle, type RequestItem } from '@/lib/claim-items';
-import { AnswerForm, ItemBadge, ItemChecklist, RequestItemsForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
+import { RemindButton, AnswerForm, ItemBadge, ItemChecklist, RequestItemsForm, AssignForm, ClaimForm, CuePanel, InsurerPanel, NoteForm, PartyForm, PhotoUploader, RemoveFile, RemoveParty, ReviewPanel, WithdrawQuestion } from '@/components/ClaimForms';
 import { ClockList } from '@/components/InboxViews';
 import { inboxFromClaim, listClaimHandlers } from '@/lib/claims-data';
 import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPriyaId, isDemoInboxClaim } from '@/lib/demo-inbox';
@@ -46,9 +47,11 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const cue = side === 'insurer' && c.submitted_at ? await getCueSubmissions(c.id).catch(() => null) : null;
   const inbox = side === 'insurer' && c.submitted_at ? inboxFromClaim(c, requests, !!cover?.after) : null;
   const handlers = inbox ? await listClaimHandlers(c.id) : [];
+  const replies = side === 'insurer' ? await getSavedReplies(c.insurer_id) : [];
+  const duplicates = side === 'insurer' && c.submitted_at ? await getPossibleDuplicates(c.id) : [];
   return (
     <>
-      <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<LinkButton href="/claims">← Claims</LinkButton>} />
+      <PageHeader crumb="CLAIMS" title={c.reference} subtitle={`${c.registration} · ${fleetName}`} actions={<>{side !== 'driver' && c.submitted_at && <LinkButton href={'/claims/' + c.id + '/summary'}>Summary to print or save</LinkButton>}<LinkButton href="/claims">← Claims</LinkButton></>} />
       {cover?.after && side !== 'driver' && <Notice alert><strong>Cover was recorded after the incident.</strong> {cover.startedAt ? `This vehicle's cover was added to the portal on ${londonDateTime(cover.recordedAt)}, after the incident at ${londonDateTime(c.incident_at)}.` : `This vehicle had no cover in the portal at the time of the incident. It was added later, on ${londonDateTime(cover.recordedAt)}.`} The insurer decides whether the claim is accepted.</Notice>}
       {sp.upload === 'failed' && <Notice alert>Your claim was saved, but some photos could not be uploaded. Add them below.</Notice>}
       <div className="claim-status">
@@ -94,7 +97,17 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
       {side === 'insurer' && (
         <section className="panel next-step"><div className="panel-body">
           <h2>{status === 'closed' ? 'Closed claim' : 'Update this claim'}</h2>
-          <InsurerPanel claim={c.id} status={status} reference={c.insurer_reference ?? ''} />
+          <InsurerPanel claim={c.id} status={status} reference={c.insurer_reference ?? ''} replies={replies} insurer={c.insurer_id} />
+        </div></section>
+      )}
+
+      {duplicates.length > 0 && (
+        <section className="panel"><div className="panel-body">
+          <div className="cardhead"><h2>Other claims on this vehicle</h2><Badge warn>{duplicates.length}</Badge></div>
+          <p className="subtext">Claims on {c.registration} from the same fleet with an incident within 7 days of this one. This is a prompt to look, not a finding: the insurer decides what it means.</p>
+          <ul className="doclist">
+            {duplicates.map(d => <li key={d.id}><Link prefetch={false} href={'/claims/' + d.id}><strong>{d.reference}</strong></Link><span className="subtext"> · {londonDateTime(d.incident_at)} · {d.location} · {statusLabel[d.status as ClaimStatus] ?? d.status}</span></li>)}
+          </ul>
         </div></section>
       )}
 
@@ -183,7 +196,8 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
                   </>
                 )}
                 {r.answer && <p className="answer-text">{r.answer}</p>}
-                {side === 'insurer' && !r.answered_at && !r.cancelled_at && open && <WithdrawQuestion claim={c.id} request={r.id} />}
+                {r.reminder_count ? <p className="subtext">Reminded {r.reminder_count} time{r.reminder_count === 1 ? '' : 's'}{r.last_reminded_at ? ', last ' + londonDateTime(r.last_reminded_at) : ''}.</p> : null}
+                {side === 'insurer' && !r.answered_at && !r.cancelled_at && open && <div className="actions"><RemindButton claim={c.id} request={r.id} /><WithdrawQuestion claim={c.id} request={r.id} /></div>}
               </li>
             ))}
           </ul>
@@ -200,7 +214,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
             </li>
           ))}
         </ol>
-        {(side === 'fleet' || (side === 'insurer' && c.submitted_at)) && <NoteForm claim={c.id} label={side === 'insurer' ? 'Add a note for the fleet' : status === 'reported' ? 'Add a note' : 'Add a note for the insurer'} />}
+        {(side === 'fleet' || (side === 'insurer' && c.submitted_at)) && <NoteForm claim={c.id} replies={side === 'insurer' ? replies : undefined} label={side === 'insurer' ? 'Add a note for the fleet' : status === 'reported' ? 'Add a note' : 'Add a note for the insurer'} />}
       </div></section>
     </>
   );
