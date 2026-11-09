@@ -24,19 +24,19 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/fleet', label: 'Vehicle register', icon: '▤' },
   { href: '/changes', label: 'Manage cover', icon: '⇄', fleet: true },
   { href: '/referrals', label: 'Authorisations', icon: '✓' },
-  { href: '/reconciliation', label: 'Reconciliation', icon: '▥' },
-  { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true },
-  { href: '/telematics', label: 'Telematics', icon: '◍', telematics: true },
-  { href: '/organisations', label: 'Customers', icon: '▧', customers: true },
-  { href: '/bordereau', label: 'Bordereau', icon: '▤', rates: true },
-  { href: '/burn-rate', label: 'Burn rate', icon: '%', rates: true },
-  { href: '/rates', label: 'Rates & terms', icon: '£', rates: true },
-  { href: '/branding', label: 'Branding', icon: '◐', platform: true },
-  { href: '/audit', label: 'Audit log', icon: '☰', audit: true },
-  { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true },
-  { href: '/users', label: 'Users', icon: '◎', admin: true },
-  { href: '/tpas', label: 'TPAs', icon: '⇢', tpa: true },
-  { href: '/install', label: 'Install on phone', icon: '▯' }
+  { href: '/reconciliation', label: 'Reconciliation', icon: '▥', group: 'Finance' },
+  { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true, group: 'Fleet & drivers' },
+  { href: '/telematics', label: 'Telematics', icon: '◍', telematics: true, group: 'Fleet & drivers' },
+  { href: '/organisations', label: 'Customers', icon: '▧', customers: true, group: 'Fleet & drivers' },
+  { href: '/bordereau', label: 'Bordereau', icon: '▤', rates: true, group: 'Finance' },
+  { href: '/burn-rate', label: 'Burn rate', icon: '%', rates: true, group: 'Finance' },
+  { href: '/rates', label: 'Rates & terms', icon: '£', rates: true, group: 'Finance' },
+  { href: '/branding', label: 'Branding', icon: '◐', platform: true, group: 'Admin' },
+  { href: '/audit', label: 'Audit log', icon: '☰', audit: true, group: 'Admin' },
+  { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true, group: 'Admin' },
+  { href: '/users', label: 'Users', icon: '◎', admin: true, group: 'Admin' },
+  { href: '/tpas', label: 'TPAs', icon: '⇢', tpa: true, group: 'Admin' },
+  { href: '/install', label: 'Install on phone', icon: '▯', group: 'Admin' }
 ];
 const planned: NavItem[] = [
   { href: '/drivers', label: 'Drivers & licences', soon: true },
@@ -65,7 +65,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
   const tpaNav: NavItem[] = [{ href: '/claims', label: 'Claims', icon: '⚑' }];
   const items = (tpaOnly ? tpaNav : driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.tpa || canManageTpas(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
-  if (!driver && !tpaOnly && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣' });
+  if (!driver && !tpaOnly && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣', group: 'Fleet & drivers' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (
     <div className="shell">
