@@ -365,3 +365,9 @@ Owner decisions: the insurer keeps the final decision and closes the claim; seve
 - Still insurer-only: adding/removing files, closing a claim, routing, the final decision, private insurer notes.
 - Migration `20261027190000_tpa_contact_fleet.sql` (run after `20261027170000_tpa_claims.sql`): `tpa_note_to_fleet`, `tpa_request_claim_items`, `tpa_remind_fleet`, reply notification trigger. TPA contact is audited under the insurer.
 - Decks: the "cannot contact the fleet or the driver" line moved to "can do".
+
+## Policy terms, 28-day minimum and bordereau (Nov 2026)
+- Migration `20261109100000_policy_terms_bordereau.sql`: `policy_terms` (append-only, per policy: commission %, addition fee, removal fee, minimum cover days), `set_policy_terms` (rates.manage, audited), shared `private.billing_lines`, `generate_reconciliation` now bills the minimum period (`reconciliation_lines.min_days_added`), `insurer_bordereau(insurer, month)`.
+- Daily rate stays the pricing basis. Minimum cover: removal allowed, billed to start + N days (no terms = no minimum). Commission is on net premium before IPT; addition/removal fees are per vehicle moved in the month. Fleets never see terms (RLS insurer-side only).
+- Web: Rates page terms section, `/bordereau` + CSV, wording "Provisional" softened. Tests: `supabase/tests/policy_terms_bordereau.sql` (14 checks), `web/tests/bordereau.test.ts`.
+- Assumptions to confirm with Aviva/Owen: commission base, fees shown separately from commission, 28 days per policy.

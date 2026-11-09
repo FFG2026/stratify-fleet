@@ -41,3 +41,19 @@ export async function addBillingRules(form: FormData): Promise<ActionResult> {
     return done('Billing rules saved. They apply from that date; earlier rules are kept.');
   } catch (error) { return fail(error); }
 }
+
+export async function addPolicyTerms(form: FormData): Promise<ActionResult> {
+  const ctx = await requireContext();
+  if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
+  try {
+    const pct = num(form.get('commission'), 'Enter the commission as a percentage, 0 or more.');
+    if (pct > 100) return { ok: false, message: 'Commission cannot be more than 100%.' };
+    const days = num(form.get('minimum'), 'Enter the minimum cover period in days (0 for none).');
+    if (!Number.isInteger(days) || days > 366) return { ok: false, message: 'Minimum cover period must be a whole number of days, 0 to 366.' };
+    await rpc('set_policy_terms', { p_policy: checkedId(form.get('policy')), p_effective_from: date(form.get('from'), 'Enter the date these terms apply from.'),
+      p_commission_pct: pct, p_addition_fee: num(form.get('addfee'), 'Enter the fee for adding a vehicle in pounds (0 for none).'),
+      p_removal_fee: num(form.get('remfee'), 'Enter the fee for removing a vehicle in pounds (0 for none).'), p_minimum_days: days, p_note: note(form.get('note')) });
+    revalidatePath('/rates'); revalidatePath('/reconciliation'); revalidatePath('/bordereau');
+    return done('Terms saved. They apply from that date; earlier terms are kept.');
+  } catch (error) { return fail(error); }
+}
