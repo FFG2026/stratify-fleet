@@ -1,3 +1,5 @@
+import { ClaimCostForm } from '@/components/ClaimCostForm';
+import { rest } from '@/lib/rest';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getContext, orgName } from '@/lib/data';
@@ -52,6 +54,7 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   const replies = side === 'insurer' ? await getSavedReplies(c.insurer_id) : [];
   const duplicates = side === 'insurer' && c.submitted_at ? await getPossibleDuplicates(c.id) : [];
   // Third-party administrators: only the insurer and the TPA the claim is routed to can read this (row-level security).
+  const cost = side === 'insurer' && c.submitted_at ? (await rest<{ paid: number; reserve: number; recorded_at: string }[]>('/rest/v1/claim_costs?select=paid,reserve,recorded_at&claim_id=eq.' + checkedId(c.id) + '&order=recorded_at.desc&limit=1').catch(() => []))[0] ?? null : null;
   const tpa = (side === 'insurer' || side === 'tpa') && c.submitted_at ? await getClaimTpa(c.id) : null;
   const tpaChoices = side === 'insurer' && c.submitted_at && open ? (await listTpas(c.insurer_id)).filter(t => t.active) : [];
   return (
@@ -130,6 +133,13 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
         <section className="panel next-step"><div className="panel-body">
           <h2>{status === 'closed' ? 'Closed claim' : 'Update this claim'}</h2>
           <InsurerPanel claim={c.id} status={status} reference={c.insurer_reference ?? ''} replies={replies} insurer={c.insurer_id} />
+        </div></section>
+      )}
+
+      {side === 'insurer' && c.submitted_at && (
+        <section className="panel"><div className="panel-body">
+          <div className="cardhead"><h2>Claim cost</h2><Badge>{cost ? `£${(Number(cost.paid) + Number(cost.reserve)).toLocaleString('en-GB', { minimumFractionDigits: 2 })} incurred` : 'Not recorded'}</Badge></div>
+          <ClaimCostForm id={c.id} paid={Number(cost?.paid ?? 0)} reserve={Number(cost?.reserve ?? 0)} />
         </div></section>
       )}
 

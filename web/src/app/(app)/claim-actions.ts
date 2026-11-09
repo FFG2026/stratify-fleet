@@ -450,3 +450,15 @@ export async function tpaRecommend(form: FormData): Promise<ClaimResult> {
     return done('Recommendation sent. The insurer makes the final decision.', id);
   } catch (error) { return fail(error); }
 }
+
+export async function setClaimCost(form: FormData): Promise<ClaimResult> {
+  try {
+    const ctx = await requireContext(); if (ctx.demo) return demoStop;
+    if (claimSide(ctx) !== 'insurer') return { ok: false, message: 'Only insurer claims staff can record claim costs.' };
+    const id = checkedId(form.get('id'));
+    const amount = (key: string, label: string) => { const raw = String(form.get(key) ?? '').replace(/[£,\s]/g, ''); const n = Number(raw === '' ? 0 : raw); if (!Number.isFinite(n) || n < 0 || n > 100000000) throw Object.assign(new Error(`Enter ${label} as an amount of 0 or more.`), { status: 400 }); return n; };
+    await rpc('set_claim_cost', { p_claim: id, p_paid: amount('paid', 'the amount paid'), p_reserve: amount('reserve', 'the reserve'), p_note: str(form, 'note', 500) || null });
+    revalidatePath('/burn-rate'); revalidatePath(`/claims/${id}`);
+    return done('Claim cost saved. Burn rate has been updated.', id);
+  } catch (error) { return fail(error); }
+}
