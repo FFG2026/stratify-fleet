@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useAction } from './useAction';
+import { VEHICLE_TYPES } from '@/lib/referrals';
 import { addBillingRules, addPolicyTerms, addRate } from '@/app/(app)/rates-actions';
 
 const status = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={r?.ok === false ? 'form-error' : 'form-note'}>{r?.message}</div>;
@@ -41,6 +42,11 @@ export function PolicyTermsForm({ policy, reference }: { policy: string; referen
       <label>Admin fee for each vehicle removed (£)<input name="remfee" inputMode="decimal" required defaultValue="0" autoComplete="off" /></label>
       <label>Minimum cover period (days; 0 for none)<input name="minimum" inputMode="numeric" required defaultValue="28" autoComplete="off" /></label>
       <label>Note (optional)<input name="note" maxLength={500} autoComplete="off" /></label>
+      <fieldset className="yesno-group span-all"><legend>Vehicles added by the customer</legend>
+        <label className="inline"><input type="radio" name="criteria" value="all" defaultChecked /> Accept every vehicle automatically</label>
+        <label className="inline"><input type="radio" name="criteria" value="list" /> Accept only these types; refer the rest to me for authorisation</label>
+        <div>{VEHICLE_TYPES.map(t => <label className="inline" key={t.value}><input type="checkbox" name="types" value={t.value} /> {t.label}</label>)}</div>
+      </fieldset>
       <p className="subtext">A vehicle removed before the minimum period is still billed up to that many days from the day it was added. Commission and fees are shown only to the insurer, never to the fleet.</p>
       <div className="actions"><button className="primary" disabled={pending}>{pending ? 'Saving…' : `Save terms for ${reference}`}</button></div>
       {status(result)}

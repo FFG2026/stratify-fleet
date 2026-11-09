@@ -59,5 +59,12 @@ begin
   if n <> 0 then raise exception 'T13 fleet read % terms rows', n; end if;
   reset role; checks := checks + 1;
 
+  -- movement lines: vehicle 1 shows add and removal dates and its own September charge
+  perform set_config('request.jwt.claims', json_build_object('sub', IA, 'role', 'authenticated')::text, true); set local role authenticated;
+  select * into r from public.insurer_bordereau_lines(ins, date '2026-09-01') where registration = 'ZZ99ZZZ';
+  if r.added_on <> date '2026-09-10' or r.removed_on <> date '2026-09-15' or r.premium_net <> 210 or r.days <> 21 then raise exception 'T14 line % % % %', r.added_on, r.removed_on, r.premium_net, r.days; end if;
+  if r.commission <> 26.25 or r.net_to_insurer <> 183.75 then raise exception 'T15 commission % net %', r.commission, r.net_to_insurer; end if;
+  reset role; checks := checks + 2;
+
   raise exception 'POLICY TERMS TESTS PASSED (% checks)', checks;
 end $$;

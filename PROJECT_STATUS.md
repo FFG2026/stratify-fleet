@@ -371,3 +371,11 @@ Owner decisions: the insurer keeps the final decision and closes the claim; seve
 - Daily rate stays the pricing basis. Minimum cover: removal allowed, billed to start + N days (no terms = no minimum). Commission is on net premium before IPT; addition/removal fees are per vehicle moved in the month. Fleets never see terms (RLS insurer-side only).
 - Web: Rates page terms section, `/bordereau` + CSV, wording "Provisional" softened. Tests: `supabase/tests/policy_terms_bordereau.sql` (14 checks), `web/tests/bordereau.test.ts`.
 - Assumptions to confirm with Aviva/Owen: commission base, fees shown separately from commission, 28 days per policy.
+
+## Authorisation of out-of-criteria additions and bordereau detail (Nov 2026)
+- Migrations `20261109130000_cover_referrals.sql`, `20261109140000_bordereau_detail.sql`. Policy terms gain `auto_accept_types` (null = accept everything, so existing policies are unchanged).
+- Fleets add vehicles through `request_vehicle_cover` (needs a vehicle type): within criteria goes straight on cover, otherwise a `cover_referrals` row (awaiting authorisation). Direct `add_vehicle_cover` is refused on a policy with criteria unless via the referral path or by someone with `referrals.decide` (insurer admin, platform).
+- Insurer `decide_cover_referral` (approve / query / decline); fleet `respond_cover_referral`, `withdraw_cover_referral`; messages append-only; everything audited under the fleet. Cover starts at approval (not backdated).
+- Bordereau: per-vehicle movement lines, net to insurer (gross less commission), reference, pending table (not in totals), CSV with all sections.
+- Tests: `supabase/tests/cover_referrals.sql` (19 checks), `policy_terms_bordereau.sql` (16). Seeds: `supabase/seed/demo_referrals.sql` (10% commission, criteria, 3 sample requests).
+- Not built: email/in-app notification when a request arrives or is queried.

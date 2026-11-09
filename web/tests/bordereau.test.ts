@@ -12,7 +12,7 @@ describe('bordereau helpers', () => {
   });
   it('flags policies with no terms in the CSV and adds a total line', () => {
     const out = bordereauCsv('2026-09', [row({ terms_set: false })]);
-    expect(out[1][17]).toBe('NO TERMS SET'); expect(out[2][0]).toBe('TOTAL');
+    expect(out[1][18]).toBe('NO TERMS SET'); expect(out[2][0]).toBe('TOTAL');
   });
   it('formats money and validates months', () => {
     expect(gbp(1234.5)).toBe('£1,234.50'); expect(isMonth('2026-09')).toBe(true); expect(isMonth('2026-13')).toBe(false); expect(isMonth(undefined)).toBe(false);

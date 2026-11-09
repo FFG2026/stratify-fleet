@@ -30,7 +30,7 @@ export default async function Changes({ searchParams }: { searchParams: Promise<
     <>
       <PageHeader title="Manage cover" subtitle="Precise effective dates. A permanent record of every change." actions={<LinkButton href="/fleet">← Vehicle register</LinkButton>} />
       <div className="tabs" role="tablist" aria-label="Coverage change">{tab('add', '＋ Add vehicle')}{tab('bulk', '⇪ Upload a list')}{tab('remove', '− Remove vehicle')}</div>
-      <Notice>Development rules: coverage starts on the addition date and ends before the removal date. Same-day removal and backdated changes require an approval process and are currently blocked. No MID submissions are sent.</Notice>
+      <Notice>Cover starts when you add the vehicle and cannot be backdated. A vehicle outside what the insurer has agreed for the policy is sent to them for authorisation first (see Authorisations). No MID submissions are sent.</Notice>
       {error && <Notice alert>{error}</Notice>}
       <div className="cover-layout">
         <div>

@@ -4,10 +4,11 @@ import { rest } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { PageHeader, Notice, Badge } from '@/components/ui';
 import { ParamSelect } from '@/components/ParamSelect';
+import { typeLabel } from '@/lib/referrals';
 import { BillingRulesForm, PolicyTermsForm, RateForm } from '@/components/RateForms';
 
 type Rate = { id: string; policy_id: string; effective_from: string; daily_rate: number; note: string | null };
-type Terms = { id: string; effective_from: string; commission_pct: number; addition_fee: number; removal_fee: number; minimum_cover_days: number; note: string | null };
+type Terms = { id: string; effective_from: string; commission_pct: number; addition_fee: number; removal_fee: number; minimum_cover_days: number; auto_accept_types: string[] | null; note: string | null };
 type Rules = { id: string; effective_from: string; start_day_charged: boolean; end_day_charged: boolean; timezone: string; rounding_dp: number; vat_rate: number; note: string | null };
 const day = (d: string) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC' });
 
@@ -25,7 +26,7 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
   if (selectedPolicy && selectedPolicy.insurer_id !== insurerId) selectedPolicy = undefined;
   selectedPolicy ??= policies[0];
   const [terms, rules, rates] = await Promise.all([
-    selectedPolicy ? rest<Terms[]>('/rest/v1/policy_terms?select=id,effective_from,commission_pct,addition_fee,removal_fee,minimum_cover_days,note&policy_id=eq.' + checkedId(selectedPolicy.id) + '&order=effective_from.desc&limit=50') : Promise.resolve([] as Terms[]),
+    selectedPolicy ? rest<Terms[]>('/rest/v1/policy_terms?select=id,effective_from,commission_pct,addition_fee,removal_fee,minimum_cover_days,auto_accept_types,note&policy_id=eq.' + checkedId(selectedPolicy.id) + '&order=effective_from.desc&limit=50') : Promise.resolve([] as Terms[]),
     rest<Rules[]>('/rest/v1/billing_rules?select=id,effective_from,start_day_charged,end_day_charged,timezone,rounding_dp,vat_rate,note&insurer_id=eq.' + checkedId(insurerId) + '&order=effective_from.desc&limit=50'),
     selectedPolicy ? rest<Rate[]>('/rest/v1/rate_cards?select=id,policy_id,effective_from,daily_rate,note&policy_id=eq.' + checkedId(selectedPolicy.id) + '&order=effective_from.desc&limit=100') : Promise.resolve([] as Rate[]),
   ]);
@@ -71,8 +72,8 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
         {!selectedPolicy ? <div className="empty">No policies yet.</div> : <>
           {!terms.length && <Notice alert>No terms are set for this policy, so the bordereau shows no commission or fees and no minimum cover period applies.</Notice>}
           {terms.length > 0 && <div className="table-scroll"><table>
-            <thead><tr><th>From</th><th>Commission</th><th>Fee per addition</th><th>Fee per removal</th><th>Minimum cover</th><th>Note</th></tr></thead>
-            <tbody>{terms.map((r, i) => <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>{Number(r.commission_pct)}%</td><td>£{Number(r.addition_fee).toFixed(2)}</td><td>£{Number(r.removal_fee).toFixed(2)}</td><td>{r.minimum_cover_days ? r.minimum_cover_days + ' days' : 'None'}</td><td>{r.note ?? ''}</td></tr>)}</tbody>
+            <thead><tr><th>From</th><th>Commission</th><th>Fee per addition</th><th>Fee per removal</th><th>Minimum cover</th><th>Accepted automatically</th><th>Note</th></tr></thead>
+            <tbody>{terms.map((r, i) => <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>{Number(r.commission_pct)}%</td><td>£{Number(r.addition_fee).toFixed(2)}</td><td>£{Number(r.removal_fee).toFixed(2)}</td><td>{r.minimum_cover_days ? r.minimum_cover_days + ' days' : 'None'}</td><td>{r.auto_accept_types ? (r.auto_accept_types.length ? r.auto_accept_types.map(typeLabel).join(', ') : 'Nothing: all referred') : 'Everything'}</td><td>{r.note ?? ''}</td></tr>)}</tbody>
           </table></div>}
           {manage && <div className="panel-body"><h3>Set terms for this policy</h3><PolicyTermsForm policy={selectedPolicy.id} reference={selectedPolicy.reference} /></div>}
         </>}

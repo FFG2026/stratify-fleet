@@ -23,6 +23,7 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/customer', label: 'Fleet dashboard', icon: '⌂', fleet: true },
   { href: '/fleet', label: 'Vehicle register', icon: '▤' },
   { href: '/changes', label: 'Manage cover', icon: '⇄', fleet: true },
+  { href: '/referrals', label: 'Authorisations', icon: '✓' },
   { href: '/reconciliation', label: 'Reconciliation', icon: '▥' },
   { href: '/drivers', label: 'Drivers & licences', icon: '⚑', staff: true },
   { href: '/telematics', label: 'Telematics', icon: '◍', telematics: true },

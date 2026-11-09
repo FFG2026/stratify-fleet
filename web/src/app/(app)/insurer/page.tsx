@@ -6,7 +6,7 @@ import { LiveDashboard, StaticDashboard } from '@/components/Dashboards';
 import { BookMiPanel } from '@/components/BookMiPanel';
 import { getBookMi } from '@/lib/book-mi-data';
 import { demoBookRows, demoMedianFirstTouchMs } from '@/lib/demo-inbox';
-import { RestError } from '@/lib/rest';
+import { RestError, rest } from '@/lib/rest';
 
 export default async function Insurer({ searchParams }: { searchParams: Promise<{ insurer?: string }> }) {
   const ctx = await getContext();
@@ -21,6 +21,7 @@ export default async function Insurer({ searchParams }: { searchParams: Promise<
   try {
     const data = await getDashboard(insurer || undefined);
     const book = await getBookMi(ctx, data.fleets).catch(() => ({ rows: [], medianFirstTouchMs: null }));
-    return (<>{header}<LiveDashboard ctx={ctx} data={data} insurerFilter={insurer} showInsurerPicker={rolesOf(ctx).includes('platform_super_admin')} /><BookMiPanel rows={demoBookRows} medianFirstTouchMs={demoMedianFirstTouchMs} demo />{book.rows.length > 0 && <BookMiPanel rows={book.rows} medianFirstTouchMs={book.medianFirstTouchMs} />}</>);
+    const pend = await rest<{ id: string }[]>('/rest/v1/cover_referrals?select=id&status=in.(awaiting_authorisation,queried)&limit=200').catch(() => []);
+    return (<>{header}{pend.length > 0 && <Notice><Link prefetch={false} href="/referrals"><strong>{pend.length} vehicle{pend.length === 1 ? '' : 's'} awaiting your authorisation →</strong></Link></Notice>}<LiveDashboard ctx={ctx} data={data} insurerFilter={insurer} showInsurerPicker={rolesOf(ctx).includes('platform_super_admin')} /><BookMiPanel rows={demoBookRows} medianFirstTouchMs={demoMedianFirstTouchMs} demo />{book.rows.length > 0 && <BookMiPanel rows={book.rows} medianFirstTouchMs={book.medianFirstTouchMs} />}</>);
   } catch (e) { return (<>{header}<Notice alert>{e instanceof RestError ? e.message : e instanceof Error ? e.message : 'Unable to load the live figures.'}</Notice></>); }
 }

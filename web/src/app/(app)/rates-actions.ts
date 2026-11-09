@@ -5,6 +5,7 @@ import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
 import { checkedId } from '@/lib/ids';
 import { parseDate } from '@/lib/dates';
+import { parseTypes } from '@/lib/referrals';
 import type { ActionResult } from '@/components/useAction';
 
 const done = (message: string): ActionResult => ({ ok: true, message });
@@ -52,7 +53,8 @@ export async function addPolicyTerms(form: FormData): Promise<ActionResult> {
     if (!Number.isInteger(days) || days > 366) return { ok: false, message: 'Minimum cover period must be a whole number of days, 0 to 366.' };
     await rpc('set_policy_terms', { p_policy: checkedId(form.get('policy')), p_effective_from: date(form.get('from'), 'Enter the date these terms apply from.'),
       p_commission_pct: pct, p_addition_fee: num(form.get('addfee'), 'Enter the fee for adding a vehicle in pounds (0 for none).'),
-      p_removal_fee: num(form.get('remfee'), 'Enter the fee for removing a vehicle in pounds (0 for none).'), p_minimum_days: days, p_note: note(form.get('note')) });
+      p_removal_fee: num(form.get('remfee'), 'Enter the fee for removing a vehicle in pounds (0 for none).'), p_minimum_days: days, p_note: note(form.get('note')),
+      p_auto_accept_types: form.get('criteria') === 'list' ? parseTypes(form.getAll('types')) : null });
     revalidatePath('/rates'); revalidatePath('/reconciliation'); revalidatePath('/bordereau');
     return done('Terms saved. They apply from that date; earlier terms are kept.');
   } catch (error) { return fail(error); }
