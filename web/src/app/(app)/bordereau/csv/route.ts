@@ -3,7 +3,7 @@ import { getContext, canViewRates } from '@/lib/data';
 import { rpc } from '@/lib/rest';
 import { csv } from '@/lib/dates';
 import { checkedId } from '@/lib/ids';
-import { bordereauCsv, isMonth, monthStart, type BordereauRow } from '@/lib/bordereau';
+import { bordereauCsv, isMonth, monthStart, type BordereauRow, type LineRow, type PendingRow } from '@/lib/bordereau';
 
 export async function GET(request: NextRequest) {
   const ctx = await getContext();
@@ -13,7 +13,8 @@ export async function GET(request: NextRequest) {
   if (!isMonth(month)) return new NextResponse('Invalid month.', { status: 400 });
   try {
     const insurer = request.nextUrl.searchParams.get('insurer') || ctx.orgs.find(o => o.kind === 'insurer')?.id;
-    const rows = await rpc<BordereauRow[]>('insurer_bordereau', { p_insurer: checkedId(insurer), p_month: monthStart(month) });
-    return new NextResponse(csv(bordereauCsv(month, rows)), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="stratify-bordereau-${month}.csv"`, 'Cache-Control': 'no-store' } });
+    const args = { p_insurer: checkedId(insurer), p_month: monthStart(month) };
+    const [rows, lines, pending] = await Promise.all([rpc<BordereauRow[]>('insurer_bordereau', args), rpc<LineRow[]>('insurer_bordereau_lines', args), rpc<PendingRow[]>('insurer_pending_referrals', args)]);
+    return new NextResponse(csv(bordereauCsv(month, rows, lines, pending)), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="stratify-bordereau-${month}.csv"`, 'Cache-Control': 'no-store' } });
   } catch (error) { return new NextResponse(error instanceof Error ? error.message : 'Unable to export.', { status: 400 }); }
 }

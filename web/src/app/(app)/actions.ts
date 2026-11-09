@@ -13,6 +13,7 @@ import { getFleetPage } from '@/lib/data';
 import { memberEmail, memberRole, roleLabels } from '@/lib/members';
 import { createLogin } from '@/lib/admin-auth';
 import { createLimiter, lookupVehicle, type VehicleSummary } from '@/lib/vehicle-lookup';
+import { isVehicleType } from '@/lib/referrals';
 import { parseVehicleCsv, makeModel, type BulkRow } from '@/lib/bulk-vehicles';
 import type { ActionResult } from '@/components/useAction';
 
@@ -32,7 +33,8 @@ const addSchema = z.object({
   registration: z.string().min(1, 'Enter the registration.'),
   starts_on: z.string(),
   make: z.string().trim().min(1, 'Enter the make.').max(100),
-  model: z.string().trim().min(1, 'Enter the model.').max(100)
+  model: z.string().trim().min(1, 'Enter the model.').max(100),
+  vehicle_type: z.string().refine(isVehicleType, 'Choose the vehicle type.')
 });
 
 export async function addVehicle(form: FormData): Promise<ActionResult> {
@@ -45,18 +47,20 @@ export async function addVehicle(form: FormData): Promise<ActionResult> {
     if (data.starts_on < londonDate(new Date())) return { ok: false, message: 'Cover cannot be backdated. Choose today or a later date.' };
     const policies = await rest<{ id: string; fleet_id: string }[]>('/rest/v1/policies?select=id,fleet_id&id=eq.' + checkedId(data.policy_id));
     if (!policies.length) return { ok: false, message: 'Policy not accessible.' };
-    await rpc('add_vehicle_cover', {
+    const out = await rpc<{ status: 'added' | 'referred' }>('request_vehicle_cover', {
       p_fleet_id: policies[0].fleet_id, p_policy_id: data.policy_id, p_registration: registration,
-      p_make_model: `${data.make} ${data.model}`.trim().slice(0, 200), p_effective_at: effectiveFrom(data.starts_on)
+      p_make_model: `${data.make} ${data.model}`.trim().slice(0, 200), p_effective_at: effectiveFrom(data.starts_on), p_vehicle_type: data.vehicle_type
     });
     refresh();
-    return done('Coverage change recorded and added to the audit trail.');
+    return done(out.status === 'referred'
+      ? 'Sent to the insurer for authorisation. The vehicle is not on cover until it is authorised. Follow it under Authorisations.'
+      : 'Coverage change recorded and added to the audit trail.');
   } catch (error) { return fail(error); }
 }
 
 // ---- bulk add: a CSV of vehicles onto one policy. Each row goes through add_vehicle_cover, so the database still checks
 // permission, tenant, policy dates and registration format for every vehicle. Nothing is written in preview mode.
-export type BulkRowResult = BulkRow & { added: boolean };
+export type BulkRowResult = BulkRow & { added: boolean; referred?: boolean };
 export type BulkResult = { ok: boolean; message: string; rows?: BulkRowResult[]; stage?: 'preview' | 'imported' };
 const bulkAllowed = createLimiter(30);
 export async function bulkVehicles(form: FormData): Promise<BulkResult> {
@@ -64,7 +68,7 @@ export async function bulkVehicles(form: FormData): Promise<BulkResult> {
   if (ctx.demo) return { ok: false, message: 'The demo account is read-only.' };
   try {
     const mode = form.get('mode') === 'import' ? 'import' : 'preview';
-    const data = z.object({ policy_id: z.string().uuid('Select a policy.'), starts_on: z.string() }).parse(Object.fromEntries(form));
+    const data = z.object({ policy_id: z.string().uuid('Select a policy.'), starts_on: z.string(), vehicle_type: z.string().refine(isVehicleType, 'Choose the vehicle type.') }).parse(Object.fromEntries(form));
     parseDate(data.starts_on);
     if (data.starts_on < londonDate(new Date())) return { ok: false, message: 'Cover cannot be backdated. Choose today or a later date.' };
     const file = form.get('file');
@@ -87,15 +91,15 @@ export async function bulkVehicles(form: FormData): Promise<BulkResult> {
       while (next < todo.length) {
         const row = todo[next++];
         try {
-          await rpc('add_vehicle_cover', { p_fleet_id: policies[0].fleet_id, p_policy_id: data.policy_id, p_registration: row.registration, p_make_model: makeModel(row), p_effective_at: effective });
-          row.added = true;
+          const out = await rpc<{ status: 'added' | 'referred' }>('request_vehicle_cover', { p_fleet_id: policies[0].fleet_id, p_policy_id: data.policy_id, p_registration: row.registration, p_make_model: makeModel(row), p_effective_at: effective, p_vehicle_type: data.vehicle_type });
+          if (out.status === 'referred') row.referred = true; else row.added = true;
         } catch (e) { row.error = messageOf(e); }
       }
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     refresh();
-    const added = results.filter(r => r.added).length, failed = results.length - added;
-    return { ok: failed === 0, stage: 'imported', rows: results, message: failed ? `${added} added, ${failed} not added. Each vehicle that was added is recorded; the others are listed below with the reason.` : `All ${added} vehicles added and recorded in the audit trail.` };
+    const referred = results.filter(r => r.referred).length, added = results.filter(r => r.added).length, failed = results.length - added - referred;
+    return { ok: failed === 0, stage: 'imported', rows: results, message: failed ? `${added} added, ${referred} sent for authorisation, ${failed} not added. The others are listed below with the reason.` : referred ? `${added} added and ${referred} sent to the insurer for authorisation (not on cover until authorised).` : `All ${added} vehicles added and recorded in the audit trail.` };
   } catch (error) { return { ok: false, message: fail(error).message }; }
 }
 

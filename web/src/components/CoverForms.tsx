@@ -4,6 +4,16 @@ import { useAction } from './useAction';
 import { addVehicle, bulkVehicles, type BulkResult, removeVehicle, lookupRegistration, findOpenCover, type OpenCover } from '@/app/(app)/actions';
 
 import { bulkTemplate } from '@/lib/bulk-vehicles';
+import { VEHICLE_TYPES } from '@/lib/referrals';
+
+const typeSelect = (label = 'Vehicle type') => (
+  <label>{label}
+    <select name="vehicle_type" required defaultValue="">
+      <option value="">Choose the type</option>
+      {VEHICLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+    </select>
+  </label>
+);
 
 type PolicyOption = { id: string; label: string };
 
@@ -44,11 +54,12 @@ export function AddVehicleForm({ policies, today, allowed }: { policies: PolicyO
         <label>Cover starts on<input name="starts_on" type="date" min={today} defaultValue={today} required /></label>
         <label>Make<input name="make" maxLength={100} required placeholder="e.g. Ford" /></label>
         <label>Model<input name="model" maxLength={100} required placeholder="e.g. Transit Custom" /></label>
+        {typeSelect()}
       </div>
       <div className="form-note" role="status" aria-live="polite">{lookupNote}</div>
       <div className="form-note"><strong>Cover starts from the moment you press the button.</strong> Choosing today starts cover now, not at midnight. A later date starts at the beginning of that day. Cover cannot be backdated, and the exact time each vehicle was added is recorded permanently.</div>
-      <div className="form-note">This records a coverage instruction in the development workspace. Insurance and MID workflows require insurer approval before production use.</div>
-      <button className="primary" disabled={!allowed || pending}>{pending ? 'Recording…' : 'Record addition'}</button>
+      <div className="form-note">If the vehicle is outside what the insurer has agreed for this policy, it is sent to them for authorisation and is <strong>not on cover until they authorise it</strong>. You will see it under Authorisations.</div>
+      <button className="primary" disabled={!allowed || pending}>{pending ? 'Recording…' : 'Add vehicle'}</button>
       <div role="status" aria-live="polite" className="form-note">{result?.message}</div>
     </form>
   );
@@ -70,7 +81,7 @@ export function BulkVehicleForm({ policies, today, allowed }: { policies: Policy
     const url = URL.createObjectURL(new Blob([bulkTemplate], { type: 'text/csv' }));
     const a = document.createElement('a'); a.href = url; a.download = 'vehicles-template.csv'; a.click(); URL.revokeObjectURL(url);
   };
-  const ready = result?.rows?.filter(r => !r.error && !r.added).length ?? 0;
+  const ready = result?.rows?.filter(r => !r.error && !r.added && !r.referred).length ?? 0;
   return (
     <form ref={form} onSubmit={e => { e.preventDefault(); run('preview'); }}>
       <p className="subtext">Add a whole fleet in one go. Use a spreadsheet saved as CSV with three columns: registration, make, model. Up to 500 vehicles at a time. <button type="button" className="textbtn" onClick={template}>Download a template</button></p>
@@ -82,6 +93,7 @@ export function BulkVehicleForm({ policies, today, allowed }: { policies: Policy
       </label>
       <div className="form-grid">
         <label>Cover starts on<input name="starts_on" type="date" min={today} defaultValue={today} required /></label>
+        {typeSelect('All vehicles in this file are')}
         <label>CSV file<input name="file" type="file" accept=".csv,text/csv" required onChange={e => { setFileName(e.target.files?.[0]?.name ?? ''); setResult(null); }} /></label>
       </div>
       <div className="form-note"><strong>Every vehicle starts from the moment you press Add</strong> (or the start of the chosen day). Cover cannot be backdated and each vehicle is recorded individually in the audit trail.</div>
@@ -95,9 +107,9 @@ export function BulkVehicleForm({ policies, today, allowed }: { policies: Policy
           <thead><tr><th>Row</th><th>Registration</th><th>Make and model</th><th>Status</th></tr></thead>
           <tbody>
             {result.rows.map(r => (
-              <tr key={r.line} className={r.error ? 'bad' : r.added ? 'good' : ''}>
+              <tr key={r.line} className={r.error ? 'bad' : r.added || r.referred ? 'good' : ''}>
                 <td>{r.line}</td><td><span className="registration">{r.registration || '—'}</span></td><td>{[r.make, r.model].filter(Boolean).join(' ')}</td>
-                <td>{r.error ? r.error : r.added ? 'Added' : 'Ready'}</td>
+                <td>{r.error ? r.error : r.added ? 'Added' : r.referred ? 'Sent for authorisation' : 'Ready'}</td>
               </tr>
             ))}
           </tbody>
