@@ -3,11 +3,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
-export type NavItem = { href: string; label: string; icon?: string; soon?: boolean; badge?: number };
+export type NavItem = { href: string; label: string; icon?: string; soon?: boolean; badge?: number; group?: string };
 
 export function Sidebar({ items, planned, brandName = null, brandLogo=null }: { items: NavItem[]; planned: NavItem[]; brandName?: string | null; brandLogo?:string|null }) {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const flat = items.filter(i => !i.group);
+  const groups = items.reduce<Record<string, NavItem[]>>((acc, i) => { if (i.group) (acc[i.group] ||= []).push(i); return acc; }, {});
   const link = (i: NavItem) => (
     <Link key={i.href} href={i.href} prefetch={false} onClick={() => setOpen(false)} className={(i.soon ? 'future ' : '') + (path === i.href ? 'active' : '')} aria-current={path === i.href ? 'page' : undefined}>
       {i.icon && <span className="nav-icon">{i.icon}</span>}{i.label}{!!i.badge && <span className="nav-badge" aria-label={`${i.badge} unread`}>{i.badge > 99 ? '99+' : i.badge}</span>}{i.soon && <span className="soon">SOON</span>}
@@ -24,7 +27,18 @@ export function Sidebar({ items, planned, brandName = null, brandLogo=null }: { 
       <div className="brand"><img className="brand-logo" src={brandLogo||"/stratify-logo.png"} alt={brandLogo?(brandName||"Insurer logo"):"Stratify"} width={2048} height={688} />{brandName && <div className="brand-name">{brandName}</div>}</div>
       <nav id="workspace-navigation" aria-label="Main navigation">
         <div className="nav-label">Workspace</div>
-        {items.map(link)}
+        {flat.map(link)}
+        {Object.entries(groups).map(([name, list]) => {
+          const isOpen = opened[name] ?? list.some(i => path === i.href || path.startsWith(i.href + '/'));
+          return (
+            <div className="nav-group-wrap" key={name}>
+              <button type="button" className="nav-group" aria-expanded={isOpen} onClick={() => setOpened({ ...opened, [name]: !isOpen })}>
+                <span>{name}</span><span className="nav-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+              </button>
+              {isOpen && <div className="nav-group-items">{list.map(link)}</div>}
+            </div>
+          );
+        })}
         {planned.length > 0 && <div className="nav-label expand-label">Expand your workspace</div>}
         {planned.map(link)}
       </nav>
