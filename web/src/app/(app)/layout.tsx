@@ -29,6 +29,7 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/telematics', label: 'Telematics', icon: '◍', telematics: true },
   { href: '/organisations', label: 'Customers', icon: '▧', customers: true },
   { href: '/bordereau', label: 'Bordereau', icon: '▤', rates: true },
+  { href: '/burn-rate', label: 'Burn rate', icon: '%', rates: true },
   { href: '/rates', label: 'Rates & terms', icon: '£', rates: true },
   { href: '/branding', label: 'Branding', icon: '◐', platform: true },
   { href: '/audit', label: 'Audit log', icon: '☰', audit: true },

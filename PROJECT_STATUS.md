@@ -379,3 +379,8 @@ Owner decisions: the insurer keeps the final decision and closes the claim; seve
 - Bordereau: per-vehicle movement lines, net to insurer (gross less commission), reference, pending table (not in totals), CSV with all sections.
 - Tests: `supabase/tests/cover_referrals.sql` (19 checks), `policy_terms_bordereau.sql` (16). Seeds: `supabase/seed/demo_referrals.sql` (10% commission, criteria, 3 sample requests).
 - Not built: email/in-app notification when a request arrives or is queried.
+
+## Burn rate, claim costs and monthly price (Nov 2026)
+- Migration `20261110090000_burn_rate_prices.sql`: `claim_costs` (append-only, insurer side only; paid + reserve), `set_claim_cost`, `insurer_burn_rate(insurer)` (incurred / earned net premium x 100, rolling up to 12 months from policy start), `fleet_policy_prices(fleet)` (monthly = daily x 365 / 12).
+- Web: `/burn-rate` page, claim cost panel on the insurer's claim page, monthly price on Rates and on the customer's dashboard. Tests `supabase/tests/burn_rate.sql` (10), `web/tests/burn.test.ts`. Demo data `supabase/seed/demo_claims.sql`.
+- Note: Adam's email gave premium / claims; the standard burn rate is claims / premium, which is what is built.

@@ -14,7 +14,7 @@ export default async function Insurer({ searchParams }: { searchParams: Promise<
   const { insurer = '' } = await searchParams;
   const header = (
     <PageHeader title="Insurer dashboard" subtitle="Confidence across every fleet in your book."
-      actions={<><LinkButton href="/fleet">View vehicle register</LinkButton>{canViewRates(ctx) && <LinkButton href={insurer ? `/bordereau?insurer=${encodeURIComponent(insurer)}` : '/bordereau'}>Bordereau</LinkButton>}<LinkButton href="/reconciliation" primary>Review reconciliation →</LinkButton></>} />
+      actions={<><LinkButton href="/fleet">View vehicle register</LinkButton>{canViewRates(ctx) && <LinkButton href={insurer ? `/bordereau?insurer=${encodeURIComponent(insurer)}` : '/bordereau'}>Bordereau</LinkButton>}{canViewRates(ctx) && <LinkButton href={insurer ? `/burn-rate?insurer=${encodeURIComponent(insurer)}` : '/burn-rate'}>Burn rate</LinkButton>}<LinkButton href="/reconciliation" primary>Review reconciliation →</LinkButton></>} />
   );
   if (!isInsurerSide(ctx)) return (<>{header}<section className="panel"><div className="panel-body"><h2>Insurer dashboard access</h2><p>This dashboard requires insurer or platform administrator membership. Your current account has not been assigned this access.</p><Link prefetch={false} className="button-link" href="/customer">Open your fleet dashboard →</Link></div></section></>);
   if (ctx.demo) return (<>{header}<StaticDashboard ctx={ctx} summary={demoSummary()} showOrgNote={false} /><BookMiPanel rows={demoBookRows} medianFirstTouchMs={demoMedianFirstTouchMs} demo /></>);

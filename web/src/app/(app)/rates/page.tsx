@@ -4,6 +4,7 @@ import { rest } from '@/lib/rest';
 import { checkedId } from '@/lib/ids';
 import { PageHeader, Notice, Badge } from '@/components/ui';
 import { ParamSelect } from '@/components/ParamSelect';
+import { monthlyFromDaily } from '@/lib/burn';
 import { typeLabel } from '@/lib/referrals';
 import { BillingRulesForm, PolicyTermsForm, RateForm } from '@/components/RateForms';
 
@@ -61,8 +62,8 @@ export default async function Rates({ searchParams }: { searchParams: Promise<{ 
           <div className="panel-body"><ParamSelect name="policy" label="Policy" value={selectedPolicy?.id ?? ''} resetParams={[]} options={policies.map(p => ({ value: p.id, label: `${p.reference} — ${orgName(ctx, p.customer_id)}` }))} /></div>
           {!rates.length && <Notice alert>No rate is set for this policy, so reconciliation shows days only for it.</Notice>}
           {rates.length > 0 && <div className="table-scroll"><table>
-            <thead><tr><th>From</th><th>Daily rate</th><th>Note</th></tr></thead>
-            <tbody>{rates.map((r, i) => <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>£{Number(r.daily_rate).toFixed(4)}</td><td>{r.note ?? ''}</td></tr>)}</tbody>
+            <thead><tr><th>From</th><th>Daily rate</th><th>Per vehicle per month</th><th>Note</th></tr></thead>
+            <tbody>{rates.map((r, i) => <tr key={r.id}><td>{day(r.effective_from)} {i === 0 && <Badge>Latest</Badge>}</td><td>£{Number(r.daily_rate).toFixed(4)}</td><td>£{monthlyFromDaily(Number(r.daily_rate)).toFixed(2)}</td><td>{r.note ?? ''}</td></tr>)}</tbody>
           </table></div>}
           {manage && selectedPolicy && <div className="panel-body"><h3>Add a rate</h3><p className="subtext">Each company can have its own rate. For a new company, copy one you have already set and change the date.</p><RateForm policy={selectedPolicy.id} reference={selectedPolicy.reference} presets={presets} /></div>}
         </>}
