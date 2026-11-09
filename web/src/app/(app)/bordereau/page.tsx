@@ -38,7 +38,7 @@ export default async function Bordereau({ searchParams }: { searchParams: Promis
           <thead><tr><th>Policy</th><th>Customer</th><th>Vehicles</th><th>Added</th><th>Removed</th><th>Vehicle days</th><th>Net premium</th><th>IPT</th><th>Gross premium</th><th>Commission</th><th>Admin fees</th><th>Remuneration</th></tr></thead>
           <tbody>{rows.map(r => (
             <tr key={r.policy_id}><td>{r.policy_number}</td><td>{r.fleet_name}</td><td>{r.vehicles}</td><td>{r.additions}</td><td>{r.removals}</td>
-              <td>{r.vehicle_days}{r.minimum_period_days > 0 && <div className="subtext">incl. {r.minimum_period_days} minimum-period</div>}</td>
+              <td>{r.vehicle_days}{r.minimum_period_days > 0 && <div className="subtext">{r.minimum_period_days} days billed from minimum cover</div>}</td>
               <td>{gbp(r.premium_net)}</td><td>{gbp(r.ipt)}</td><td>{gbp(r.premium_gross)}</td>
               <td>{gbp(r.commission)}<div className="subtext">{Number(r.commission_pct)}%</div></td>
               <td>{gbp(r.admin_fees)}{r.admin_fees > 0 && <div className="subtext">{r.additions}×{gbp(r.addition_fee)} + {r.removals}×{gbp(r.removal_fee)}</div>}</td>
