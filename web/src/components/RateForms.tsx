@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useAction } from './useAction';
-import { addBillingRules, addRate } from '@/app/(app)/rates-actions';
+import { addBillingRules, addPolicyTerms, addRate } from '@/app/(app)/rates-actions';
 
 const status = (r: { ok: boolean; message: string } | null) => <div role="status" aria-live="polite" className={r?.ok === false ? 'form-error' : 'form-note'}>{r?.message}</div>;
 
@@ -25,6 +25,24 @@ export function RateForm({ policy, reference, presets = [] }: { policy: string; 
       <label>Daily rate per vehicle (£)<input name="rate" inputMode="decimal" required autoComplete="off" placeholder="e.g. 8.2100" value={rate} onChange={e => setRate(e.target.value)} /></label>
       <label>Note (optional)<input name="note" maxLength={500} autoComplete="off" /></label>
       <div className="actions"><button className="primary" disabled={pending}>{pending ? 'Saving…' : `Add rate to ${reference}`}</button></div>
+      {status(result)}
+    </form>
+  );
+}
+
+export function PolicyTermsForm({ policy, reference }: { policy: string; reference: string }) {
+  const { pending, result, onSubmit } = useAction(addPolicyTerms);
+  return (
+    <form className="form-grid" onSubmit={onSubmit}>
+      <input type="hidden" name="policy" value={policy} />
+      <label>Applies from<input name="from" type="date" required /></label>
+      <label>Commission (% of net premium)<input name="commission" inputMode="decimal" required autoComplete="off" placeholder="e.g. 12.5" /></label>
+      <label>Admin fee for each vehicle added (£)<input name="addfee" inputMode="decimal" required defaultValue="0" autoComplete="off" /></label>
+      <label>Admin fee for each vehicle removed (£)<input name="remfee" inputMode="decimal" required defaultValue="0" autoComplete="off" /></label>
+      <label>Minimum cover period (days; 0 for none)<input name="minimum" inputMode="numeric" required defaultValue="28" autoComplete="off" /></label>
+      <label>Note (optional)<input name="note" maxLength={500} autoComplete="off" /></label>
+      <p className="subtext">A vehicle removed before the minimum period is still billed up to that many days from the day it was added. Commission and fees are shown only to the insurer, never to the fleet.</p>
+      <div className="actions"><button className="primary" disabled={pending}>{pending ? 'Saving…' : `Save terms for ${reference}`}</button></div>
       {status(result)}
     </form>
   );

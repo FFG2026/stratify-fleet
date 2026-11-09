@@ -47,7 +47,7 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader crumb="FINANCE" title="Reconciliation" subtitle="Coverage reconciled down to the vehicle." actions={<PrintButton />} />
-      <Notice><strong>Provisional report.</strong> {saved ? `Saved database report ${saved.report.id}. Rules snapshot: ${saved.report.rules_source}.` : ctx.demo ? 'Select a policy and generate a report, or reopen a saved report below. Reports retain the rules and rates used at generation.' : 'Live preview from the vehicle register: every vehicle with cover in the month, counted by date (start date included, removal date excluded). Choose a policy and generate a saved report to apply the insurer\'s stored rules and rates.'} Saved reports follow their stored rules snapshot. The date-only preview includes the start date and excludes the removal date. Report finalisation is not available.</Notice>
+      <Notice><strong>Monthly statement.</strong> {saved ? `Saved database report ${saved.report.id}. Rules snapshot: ${saved.report.rules_source}.` : ctx.demo ? 'Select a policy and generate a report, or reopen a saved report below. Reports retain the rules and rates used at generation.' : 'Live preview from the vehicle register: every vehicle with cover in the month. Generate a statement for a policy to apply the insurer\'s rates, tax and minimum cover period.'} Saved reports keep the rules and rates used when they were generated, so they never change afterwards.</Notice>
       {error && <Notice alert>{error}</Notice>}
       <div className="filters">
         <ParamSelect name="policy" label="Policy" value={policy} options={[{ value: '', label: 'All authorised policies' }, ...ctx.policies.map(p => ({ value: p.id, label: p.reference }))]} />
@@ -78,7 +78,7 @@ export default async function Reconciliation({ searchParams }: { searchParams: P
               <tr key={r.policy_id + r.registration}>
                 <td><span className="registration">{r.registration}</span></td>
                 <td>{orgName(ctx, ctx.policies.find(p => p.id === r.policy_id)?.customer_id)}</td>
-                <td>{ref(r.policy_id)}</td><td><strong>{r.days}</strong></td><td><Badge warn>Provisional</Badge></td>
+                <td>{ref(r.policy_id)}</td><td><strong>{r.days}</strong></td><td><Badge>Statement</Badge></td>
               </tr>
             ))}
           </tbody>

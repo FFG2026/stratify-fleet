@@ -53,7 +53,7 @@ export function LiveDashboard({ ctx, data, insurerFilter, showInsurerPicker }: {
         <section className="panel sage"><div className="panel-body">
           <div className="cardhead"><h2>Needs your attention</h2><Badge>Live</Badge></div>
           <Attention icon={String(c.scheduledAdds + c.scheduledRemovals)} title="Scheduled cover changes" text="Taking effect in the next 7 days." />
-          <Attention icon={String(c.provisionalReports)} title="Provisional reconciliations" text="Generated in the last 30 days. None can be finalised yet." href="/reconciliation" />
+          <Attention icon={String(c.provisionalReports)} title="Statements generated" text="Monthly statements generated in the last 30 days." href="/reconciliation" />
           <Attention icon="⇄" title="MIB / MID integration" text="Not connected. No external submissions are sent." />
         </div></section>
       </div>
