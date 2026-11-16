@@ -76,7 +76,7 @@ export function FleetTable({ ctx, rows }: { ctx: Context; rows: Period[] }) {
               const policy = ctx.policies.find(p => p.id === r.policy_id);
               return (
                 <tr key={r.id}>
-                  <td><span className="registration">{r.registration}</span></td>
+                  <td>{r.vehicle_id ? <Link prefetch={false} className="registration" href={'/fleet/' + r.vehicle_id} aria-label={'Open ' + r.registration}>{r.registration}</Link> : <span className="registration">{r.registration}</span>}</td>
                   <td><strong>{r.make}</strong><div className="subtext">{r.model}</div></td>
                   <td>{policy?.reference}</td>
                   <td>{r.starts_on}</td>
