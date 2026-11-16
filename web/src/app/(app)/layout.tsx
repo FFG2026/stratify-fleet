@@ -11,6 +11,8 @@ import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
 import { claimSide, unreadCount } from '@/lib/claims-data';
+import { rest } from '@/lib/rest';
+import { pendingCount } from '@/lib/referrals';
 import { signOut } from './actions';
 import { canReadCrm } from '@/lib/crm';
 import { NotificationToasts } from '@/components/NotificationToasts';
@@ -62,9 +64,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ];
   const claimsOn = !!claimSide(ctx);
   const unread = claimsOn ? await unreadCount() : 0;
+  let referralBadge = 0;
+  if (!ctx.demo && !tpaOnly && !driver) {
+    try { referralBadge = pendingCount(await rest<{ status: string }[]>('/rest/v1/cover_referrals?select=status&status=in.(awaiting_authorisation,queried)&limit=200'), isInsurerSide(ctx)); } catch { referralBadge = 0; }
+  }
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
   const tpaNav: NavItem[] = [{ href: '/claims', label: 'Claims', icon: '⚑' }];
-  const items = (tpaOnly ? tpaNav : driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.tpa || canManageTpas(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i));
+  const items = (tpaOnly ? tpaNav : driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.tpa || canManageTpas(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i.href === '/referrals' ? { ...i, badge: referralBadge } : i));
   if (!driver && !tpaOnly && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣', group: 'Fleet & drivers' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
   return (

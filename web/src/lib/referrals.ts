@@ -23,3 +23,9 @@ export type Referral = {
   requested_effective_at: string; request_note: string | null; status: ReferralStatus; created_at: string; updated_at: string; period_id: string | null;
 };
 export type ReferralMessage = { id: string; referral_id: string; side: 'fleet' | 'insurer'; body: string; created_at: string };
+
+/** Red nav marker: requests waiting on the insurer to decide (insurer side), or queried and waiting on the customer's answer (customer side). */
+export function pendingCount(rows: { status: string }[], insurerSide: boolean): number {
+  const want = insurerSide ? 'awaiting_authorisation' : 'queried';
+  return rows.filter(r => r.status === want).length;
+}

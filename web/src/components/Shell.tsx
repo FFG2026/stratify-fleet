@@ -13,7 +13,7 @@ export function Sidebar({ items, planned, brandName = null, brandLogo=null }: { 
   const groups = items.reduce<Record<string, NavItem[]>>((acc, i) => { if (i.group) (acc[i.group] ||= []).push(i); return acc; }, {});
   const link = (i: NavItem) => (
     <Link key={i.href} href={i.href} prefetch={false} onClick={() => setOpen(false)} className={(i.soon ? 'future ' : '') + (path === i.href ? 'active' : '')} aria-current={path === i.href ? 'page' : undefined}>
-      {i.icon && <span className="nav-icon">{i.icon}</span>}{i.label}{!!i.badge && <span className="nav-badge" aria-label={`${i.badge} unread`}>{i.badge > 99 ? '99+' : i.badge}</span>}{i.soon && <span className="soon">SOON</span>}
+      {i.icon && <span className="nav-icon">{i.icon}</span>}{i.label}{!!i.badge && <span className="nav-badge" aria-label={`${i.badge} waiting`}>{i.badge > 99 ? '99+' : i.badge}</span>}{i.soon && <span className="soon">SOON</span>}
     </Link>
   );
   return (
