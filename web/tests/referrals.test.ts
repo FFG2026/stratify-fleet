@@ -8,6 +8,6 @@ describe('referral helpers', () => {
   it('treats only awaiting and queried as open', () => { expect(['awaiting_authorisation', 'queried', 'approved', 'declined', 'withdrawn'].map(isOpen)).toEqual([true, true, false, false, false]); });
   it('builds a bordereau reference and net to insurer', () => {
     expect(bordereauRef('Northbridge Mutual (demo)', '2026-11')).toBe('BORD-NORTHB-11-2026');
-    expect(netToInsurer({ premium_gross: 336, commission: 24 } as unknown as BordereauRow)).toBe(312);
+    expect(netToInsurer({ premium_net: 300, premium_gross: 336, commission: 24 } as unknown as BordereauRow)).toBe(276);
   });
 });

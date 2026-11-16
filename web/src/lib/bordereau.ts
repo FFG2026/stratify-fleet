@@ -12,7 +12,7 @@ export type LineRow = {
   premium_net: number; ipt: number; premium_gross: number; commission: number; net_to_insurer: number;
 };
 export type PendingRow = { id: string; policy_number: string; fleet_name: string; registration: string; make_model: string | null; vehicle_type: string; status: string; requested_on: string; estimated_net: number };
-export const netToInsurer = (r: BordereauRow) => Math.round((Number(r.premium_gross) - Number(r.commission)) * 100) / 100;
+export const netToInsurer = (r: BordereauRow) => Math.round((Number(r.premium_net) - Number(r.commission)) * 100) / 100;
 export const bordereauRef = (insurerName: string, month: string) => 'BORD-' + insurerName.replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase() + '-' + month.slice(5, 7) + '-' + month.slice(0, 4);
 export const shortDate = (d: string | null) => (d ? new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric' }) : '');
 export const gbp = (n: number | string) => '£' + Number(n).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -30,7 +30,7 @@ export const dailyFromMonthly = (monthly: number) => Math.round((monthly * 12 / 
 
 export function bordereauCsv(month: string, rows: BordereauRow[], lines: LineRow[] = [], pending: PendingRow[] = []): unknown[][] {
   const head = ['Month', 'Policy', 'Customer', 'Vehicles', 'Additions', 'Removals', 'Vehicle days', 'Days from minimum period', 'Net premium', 'IPT', 'Gross premium',
-    'Commission %', 'Commission', 'Addition fee each', 'Removal fee each', 'Admin fees', 'Total remuneration', 'Net premium to insurer (gross less commission)', 'Terms set'];
+    'Commission %', 'Commission', 'Addition fee each', 'Removal fee each', 'Admin fees', 'Total remuneration', 'Net premium to insurer (net premium less commission, excluding IPT)', 'Terms set'];
   const t = totals(rows);
   const tail: unknown[][] = [];
   if (lines.length) tail.push([], ['MOVEMENTS THIS MONTH'], ['Policy', 'Customer', 'Registration', 'Vehicle', 'Added on', 'Removed on', 'Status', 'Days billed', 'Days from minimum period', 'Net premium', 'IPT', 'Gross premium', 'Commission', 'Net to insurer'],
@@ -40,6 +40,6 @@ export function bordereauCsv(month: string, rows: BordereauRow[], lines: LineRow
   return [head,
     ...rows.map(r => [month, r.policy_number, r.fleet_name, r.vehicles, r.additions, r.removals, r.vehicle_days, r.minimum_period_days, r.premium_net, r.ipt, r.premium_gross,
       r.commission_pct, r.commission, r.addition_fee, r.removal_fee, r.admin_fees, r.remuneration, netToInsurer(r), r.terms_set ? 'yes' : 'NO TERMS SET']),
-    ['TOTAL', '', '', t.vehicles, t.additions, t.removals, t.vehicle_days, '', t.premium_net, t.ipt, t.premium_gross, '', t.commission, '', '', t.admin_fees, t.remuneration, Math.round((t.premium_gross - t.commission) * 100) / 100, ''],
+    ['TOTAL', '', '', t.vehicles, t.additions, t.removals, t.vehicle_days, '', t.premium_net, t.ipt, t.premium_gross, '', t.commission, '', '', t.admin_fees, t.remuneration, Math.round((t.premium_net - t.commission) * 100) / 100, ''],
     ...tail];
 }

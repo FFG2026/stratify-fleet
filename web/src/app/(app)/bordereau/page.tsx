@@ -41,7 +41,7 @@ export default async function Bordereau({ searchParams }: { searchParams: Promis
           <div className="stat"><div className="stat-label">Under query</div><div className="stat-number">{pending.filter(p => p.status === 'queried').length}</div><div className="stat-note">Not on cover</div></div>
           <div className="stat"><div className="stat-label">Gross premium (inc IPT)</div><div className="stat-number">{gbp(t.premium_gross)}</div><div className="stat-note">Confirmed cover only</div></div>
           <div className="stat"><div className="stat-label">Commission</div><div className="stat-number">{gbp(t.commission)}</div><div className="stat-note">+ {gbp(t.admin_fees)} fees</div></div>
-          <div className="stat"><div className="stat-label">Net premium to insurer</div><div className="stat-number">{gbp(t.premium_gross - t.commission)}</div><div className="stat-note">Gross less commission</div></div>
+          <div className="stat"><div className="stat-label">Net premium to insurer</div><div className="stat-number">{gbp(t.premium_net - t.commission)}</div><div className="stat-note">Net premium less commission (excl. IPT)</div></div>
         </div>
       )}
       {missing > 0 && <Notice alert>{missing} {missing === 1 ? 'policy has' : 'policies have'} no commission or fee terms set, so remuneration shows as £0.00 for {missing === 1 ? 'it' : 'them'}. Set them on the <Link href="/rates">Rates</Link> page.</Notice>}
@@ -58,7 +58,7 @@ export default async function Bordereau({ searchParams }: { searchParams: Promis
               <td>{gbp(r.admin_fees)}{r.admin_fees > 0 && <div className="subtext">{r.additions}×{gbp(r.addition_fee)} + {r.removals}×{gbp(r.removal_fee)}</div>}</td>
               <td><strong>{gbp(r.remuneration)}</strong>{!r.terms_set && <> <Badge warn>No terms</Badge></>}</td><td>{gbp(netToInsurer(r))}</td></tr>
           ))}</tbody>
-          <tfoot><tr><th colSpan={2}>Total</th><th>{t.vehicles}</th><th>{t.additions}</th><th>{t.removals}</th><th>{t.vehicle_days}</th><th>{gbp(t.premium_net)}</th><th>{gbp(t.ipt)}</th><th>{gbp(t.premium_gross)}</th><th>{gbp(t.commission)}</th><th>{gbp(t.admin_fees)}</th><th>{gbp(t.remuneration)}</th><th>{gbp(t.premium_gross - t.commission)}</th></tr></tfoot>
+          <tfoot><tr><th colSpan={2}>Total</th><th>{t.vehicles}</th><th>{t.additions}</th><th>{t.removals}</th><th>{t.vehicle_days}</th><th>{gbp(t.premium_net)}</th><th>{gbp(t.ipt)}</th><th>{gbp(t.premium_gross)}</th><th>{gbp(t.commission)}</th><th>{gbp(t.admin_fees)}</th><th>{gbp(t.remuneration)}</th><th>{gbp(t.premium_net - t.commission)}</th></tr></tfoot>
         </table></div></div>
       )}
       {lines.length > 0 && (
