@@ -8,9 +8,9 @@ export const Badge = ({ children, warn = false }: { children: ReactNode; warn?: 
 export const fmt = (n: number | string) => Number(n).toLocaleString('en-GB');
 export const Notice = ({ children, alert = false }: { children: ReactNode; alert?: boolean }) => <div className="notice" role={alert ? 'alert' : undefined}>{children}</div>;
 
-export function Stats({ items }: { items: [string, string | number, string, string?][] }) {
+export function Stats({ items, compact }: { items: [string, string | number, string, string?][]; compact?: boolean }) {
   return (
-    <div className="stats">
+    <div className={compact ? 'stats stats-compact' : 'stats'}>
       {items.map(([label, value, note, href]) => {
         const body = (
           <>

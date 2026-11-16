@@ -22,7 +22,7 @@ export default async function VehicleDetail({ params }: { params: Promise<{ id: 
   return (
     <>
       <PageHeader title={vehicle.registration} subtitle={(vehicle.make_model || 'Vehicle') + ' · ' + orgName(ctx, vehicle.fleet_id)} actions={<LinkButton href="/fleet">← Vehicle register</LinkButton>} />
-      <Stats items={[
+      <Stats compact items={[
         ['Cover status', current ? 'On cover' : 'Not on cover', current ? 'Cover started ' + ukDate(current.starts_on) : periods.length ? 'Last period ended ' + ukDate(periods[0].ends_on ?? periods[0].starts_on) : 'No cover recorded'],
         ['Policy', current ? policyRef(current.policy_id) : periods[0] ? policyRef(periods[0].policy_id) : '—', orgName(ctx, vehicle.fleet_id)],
         ['Current driver', driver ? showName(driver) : 'Nobody assigned', driver ? 'Since ' + ukDate(driver.from) : 'No driver is assigned today'],
