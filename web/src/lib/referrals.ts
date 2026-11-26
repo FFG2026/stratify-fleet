@@ -20,7 +20,7 @@ export const isOpen = (s: string) => s === 'awaiting_authorisation' || s === 'qu
 
 export type Referral = {
   id: string; fleet_id: string; policy_id: string; registration: string; make_model: string | null; vehicle_type: VehicleType;
-  requested_effective_at: string; request_note: string | null; status: ReferralStatus; created_at: string; updated_at: string; period_id: string | null;
+  requested_effective_at: string; request_note: string | null; status: ReferralStatus; created_at: string; updated_at: string; period_id: string | null; agreed_daily_rate?: number | string | null;
 };
 export type ReferralMessage = { id: string; referral_id: string; side: 'fleet' | 'insurer'; body: string; created_at: string };
 
@@ -29,3 +29,13 @@ export function pendingCount(rows: { status: string }[], insurerSide: boolean): 
   const want = insurerSide ? 'awaiting_authorisation' : 'queried';
   return rows.filter(r => r.status === want).length;
 }
+
+/** Parse the insurer's agreed daily rate from the form. Blank means "use the policy's normal rate". */
+export function parseDailyRate(v: unknown): { ok: true; value: number | null } | { ok: false } {
+  const t = String(v ?? '').replace(/[£,\s]/g, '');
+  if (t === '') return { ok: true, value: null };
+  if (!/^\d{1,5}(\.\d{1,4})?$/.test(t)) return { ok: false };
+  const n = Number(t);
+  return n >= 0 && n <= 10000 ? { ok: true, value: n } : { ok: false };
+}
+export const monthlyFromDaily = (d: number) => Math.round(d * 365 / 12 * 100) / 100;

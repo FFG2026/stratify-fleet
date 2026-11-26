@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { rpc } from '@/lib/rest';
 import { requireContext, messageOf } from '@/lib/session';
 import { checkedId } from '@/lib/ids';
+import { parseDailyRate } from '@/lib/referrals';
 import type { ActionResult } from '@/components/useAction';
 
 const done = (message: string): ActionResult => ({ ok: true, message });
@@ -20,7 +21,9 @@ export async function decideReferral(form: FormData): Promise<ActionResult> {
     if (!['approve', 'query', 'decline'].includes(decision)) return { ok: false, message: 'Choose approve, query or decline.' };
     const message = text(form.get('message'));
     if (decision !== 'approve' && !message) return { ok: false, message: 'Write a message for the customer first.' };
-    await rpc('decide_cover_referral', { p_referral: checkedId(form.get('referral')), p_decision: decision, p_message: message || null });
+    const rate = decision === 'approve' ? parseDailyRate(form.get('daily_rate')) : { ok: true as const, value: null };
+    if (!rate.ok) return { ok: false, message: 'Enter the daily price as an amount such as 18.50, or leave it blank to use the policy rate.' };
+    await rpc('decide_cover_referral', { p_referral: checkedId(form.get('referral')), p_decision: decision, p_message: message || null, ...(rate.value !== null ? { p_daily_rate: rate.value } : {}) });
     refresh();
     return done(decision === 'approve' ? 'Authorised. The vehicle is now on cover.' : decision === 'query' ? 'Query sent to the customer.' : 'Declined. The customer has been told.');
   } catch (error) { return fail(error); }
