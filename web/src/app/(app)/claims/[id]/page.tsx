@@ -16,6 +16,9 @@ import { demoClaimNote, demoFleetLabel, demoInboxClaims, demoPriyaEmail, demoPri
 import { handlerLabel } from '@/lib/inbox';
 import { tpaRecommendationLabel } from '@/lib/tpa';
 import { AssignTpaForm, TpaRecommendForm, TpaThreadForm } from '@/components/TpaForms';
+import { getRepair, listRepairers } from '@/lib/repairs';
+import { RepairView } from '@/components/RepairView';
+import { AssignRepairerForm } from '@/components/RepairForms';
 
 const yn = (v: boolean | null) => (v === null ? 'Not said' : v ? 'Yes' : 'No');
 const time = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
@@ -56,6 +59,8 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
   // Third-party administrators: only the insurer and the TPA the claim is routed to can read this (row-level security).
   const cost = side === 'insurer' && c.submitted_at ? (await rest<{ paid: number; reserve: number; recorded_at: string }[]>('/rest/v1/claim_costs?select=paid,reserve,recorded_at&claim_id=eq.' + checkedId(c.id) + '&order=recorded_at.desc&limit=1').catch(() => []))[0] ?? null : null;
   const tpa = (side === 'insurer' || side === 'tpa') && c.submitted_at ? await getClaimTpa(c.id) : null;
+  const repairData = side === 'insurer' || side === 'fleet' || side === 'tpa' ? await getRepair(c.id) : null;
+  const repairChoices = side === 'insurer' && c.submitted_at && open ? (await listRepairers(c.insurer_id)).filter(r => r.active) : [];
   const tpaChoices = side === 'insurer' && c.submitted_at && open ? (await listTpas(c.insurer_id)).filter(t => t.active) : [];
   return (
     <>
@@ -120,6 +125,18 @@ export default async function ClaimPage({ params, searchParams }: { params: Prom
           {open ? <TpaRecommendForm claim={c.id} current={tpa.routing?.recommendation ?? null} currentNote={tpa.routing?.recommendation_note ?? null} /> : <Notice>This claim is closed.</Notice>}
           <TpaThread tpa={tpa} />
           {open && <TpaThreadForm claim={c.id} as="tpa" />}
+        </div></section>
+      )}
+      {(repairData || (side === 'insurer' && repairChoices.length > 0)) && (
+        <section className="panel"><div className="panel-body">
+          {side === 'insurer' && open && repairChoices.length > 0 && !(repairData && ['approved', 'completed'].includes(repairData.repair.status)) && (
+            <>
+              <h2>{repairData ? 'Repair shop' : 'Repairs'}</h2>
+              <p className="subtext">Pass the claim to a body shop. They add photos and a quote, and you approve the repair. The fleet and any TPA on the claim can see it.</p>
+              <AssignRepairerForm claim={c.id} current={repairData?.repair.repairer_id ?? null} repairers={repairChoices} />
+            </>
+          )}
+          {repairData && <RepairView claim={c.id} data={repairData} viewer={side === 'insurer' ? 'insurer' : side === 'tpa' ? 'tpa' : 'fleet'} claimOpen={open} />}
         </div></section>
       )}
       {side === 'tpa' && open && (

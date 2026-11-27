@@ -15,6 +15,7 @@ export type Context = {
   memberships: Membership[];
   // Third-party administrators this person works for (empty for everyone else).
   tpas?: { id: string; name: string; insurer_id: string }[];
+  repairers?: { id: string; name: string; insurer_id: string }[];
 };
 export type FleetOverviewRow = {
   fleet_id: string; fleet_name: string; insurer_id: string; vehicles_total: number; vehicles_on_cover: number; vehicles_scheduled: number;

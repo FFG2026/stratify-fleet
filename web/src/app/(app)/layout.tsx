@@ -6,13 +6,14 @@ import { getEnv } from '@/lib/env';
 import { ApplyBranding } from '@/components/ApplyBranding';
 import { adminRoles, mfaRequiredForAdmins } from '@/lib/mfa';
 import { Suspense } from 'react';
-import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, canViewAudit, rolesOf, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, isTpaOnly, canManageTpas, orgName } from '@/lib/data';
+import { getContext, canViewDrivers, canManageUsers, canCreateCustomers, canViewRates, canViewAudit, rolesOf, isPlatform, isInsurerSide, isInsurerOnly, isDriverOnly, isTpaOnly, isRepairerOnly, canManageTpas, orgName } from '@/lib/data';
 import { Sidebar, type NavItem } from '@/components/Shell';
 import { PolicySwitcher } from '@/components/ParamSelect';
 import { Badge } from '@/components/ui';
 import { claimSide, unreadCount } from '@/lib/claims-data';
 import { rest } from '@/lib/rest';
 import { pendingCount } from '@/lib/referrals';
+import { myRepairs } from '@/lib/repairs';
 import { signOut } from './actions';
 import { canReadCrm } from '@/lib/crm';
 import { NotificationToasts } from '@/components/NotificationToasts';
@@ -38,6 +39,7 @@ const nav: (NavItem & { audit?: boolean; rates?: boolean; customers?: boolean; f
   { href: '/integrations', label: 'MID / MIB status', icon: '⇄', audit: true, group: 'Admin' },
   { href: '/users', label: 'Users', icon: '◎', admin: true, group: 'Admin' },
   { href: '/tpas', label: 'TPAs', icon: '⇢', tpa: true, group: 'Admin' },
+  { href: '/repairers', label: 'Repair shops', icon: '⚒', tpa: true, group: 'Admin' },
   { href: '/install', label: 'Install on phone', icon: '▯', group: 'Admin' }
 ];
 const planned: NavItem[] = [
@@ -55,7 +57,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
   const brand = ctx.demo ? null : (await rpc<{ display_name: string | null; accent: string | null; logo_path?:string|null }[]>('my_branding', {}).catch(() => []))[0] ?? null;
   const driver = isDriverOnly(ctx);
-  const tpaOnly = isTpaOnly(ctx);
+  const repairerOnly = isRepairerOnly(ctx);
+  const tpaOnly = isTpaOnly(ctx) || repairerOnly;
   const driverNav: NavItem[] = [
     { href: '/driver', label: 'Driver dashboard', icon: '⌂' },
     { href: '/drivers', label: 'Drivers & licences', icon: '◎' },
@@ -69,7 +72,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     try { referralBadge = pendingCount(await rest<{ status: string }[]>('/rest/v1/cover_referrals?select=status&status=in.(awaiting_authorisation,queried)&limit=200'), isInsurerSide(ctx)); } catch { referralBadge = 0; }
   }
   const staffNav: NavItem[] = claimsOn ? [{ href: '/claims', label: 'Claims / FNOL', icon: '⚑' }] : [];
-  const tpaNav: NavItem[] = [{ href: '/claims', label: 'Claims', icon: '⚑' }];
+  const repairBadge = repairerOnly ? (await myRepairs()).filter(j => j.repair_status === 'with_repairer' || j.repair_status === 'approved').length : 0;
+  const tpaNav: NavItem[] = repairerOnly ? [{ href: '/repairs', label: 'Repairs', icon: '⚒', badge: repairBadge }] : [{ href: '/claims', label: 'Claims', icon: '⚑' }];
   const items = (tpaOnly ? tpaNav : driver ? driverNav : [...nav.filter(i => (!i.staff || ctx.demo || canViewDrivers(ctx)) && (!i.fleet || !isInsurerOnly(ctx)) && (!i.customers || canCreateCustomers(ctx)) && (!i.rates || canViewRates(ctx)) && (!i.audit || canViewAudit(ctx)) && (!i.admin || canManageUsers(ctx)) && (!i.tpa || canManageTpas(ctx)) && (!i.platform || isPlatform(ctx)) && (i.href !== '/branding' || !ctx.demo) && (!i.insurer || isInsurerSide(ctx)) && (!i.telematics || !!telematicsView(ctx))), ...staffNav]).map(i => (i.href === '/claims' ? { ...i, badge: unread } : i.href === '/referrals' ? { ...i, badge: referralBadge } : i));
   if (!driver && !tpaOnly && canReadCrm(ctx)) items.push({ href: '/crm', label: 'Fleet CRM', icon: '▣', group: 'Fleet & drivers' });
   const initials = (ctx.user.email || 'S').slice(0, 2).toUpperCase();
